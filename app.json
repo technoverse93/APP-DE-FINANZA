@@ -1,0 +1,36 @@
+{
+  "expo": {
+    "name": "Finanza",
+    "slug": "app-de-finanza",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "scheme": "appdefinanza",
+    "ios": {
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "Se usa tu biometría para desbloquear la aplicación."
+      }
+    },
+    "android": {
+      "package": "com.technoverse93.appdefinanza",
+      "adaptiveIcon": {
+        "backgroundColor": "#F2F2F7",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "permissions": ["android.permission.USE_BIOMETRIC"]
+    },
+    "plugins": [
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Se usa tu biometría para desbloquear la aplicación."
+        }
+      ]
+    ]
+  }
+}
