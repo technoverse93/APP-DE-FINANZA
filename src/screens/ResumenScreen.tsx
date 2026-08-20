@@ -1,0 +1,195 @@
+import { useState } from 'react';
+import {
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native';
+import { BlurHeader, Card, ListRow, PrimaryButton, SectionHeader } from '../components';
+import { formatearColones } from '../core/payroll/distribution';
+import { useQuincena } from '../state/useQuincena';
+import { pedirSincronizacion } from '../lib/backgroundSync';
+import { colors, radius, spacing, typography } from '../theme';
+
+const FORMATO_FECHA = new Intl.DateTimeFormat('es-CR', {
+  weekday: 'long',
+  day: 'numeric',
+  month: 'long',
+  timeZone: 'America/Costa_Rica',
+});
+
+function fechaLegible(fecha: Date): string {
+  try {
+    return FORMATO_FECHA.format(fecha);
+  } catch {
+    // Hermes puede no traer los datos de es-CR; el ISO corto es el respaldo.
+    return fecha.toISOString().slice(0, 10);
+  }
+}
+
+const ETIQUETAS_ESTADO = {
+  deficit: { texto: 'No alcanza el margen de seguridad', tono: 'negativo' },
+  ajustado: { texto: 'Justo dentro del margen', tono: 'atencion' },
+  holgado: { texto: 'Con excedente para capital', tono: 'positivo' },
+} as const;
+
+export function ResumenScreen() {
+  const { payday, ventanaAbierta, abreEl, gastosFijos, distribucion, setColilla, recargar } =
+    useQuincena();
+  const [texto, setTexto] = useState('');
+  const [sincronizando, setSincronizando] = useState(false);
+
+  const aplicarColilla = () => {
+    const monto = Number(texto.replace(/[^\d]/g, ''));
+    setColilla(Number.isFinite(monto) && monto > 0 ? monto : null);
+  };
+
+  const sincronizar = async () => {
+    setSincronizando(true);
+    try {
+      await pedirSincronizacion();
+      await recargar();
+    } finally {
+      setSincronizando(false);
+    }
+  };
+
+  return (
+    <SafeAreaView style={styles.pantalla}>
+      <BlurHeader titulo="Quincena" subtitulo={`Próximo pago: ${fechaLegible(payday.date)}`} />
+
+      <ScrollView
+        contentContainerStyle={styles.contenido}
+        refreshControl={
+          <RefreshControl refreshing={sincronizando} onRefresh={() => void sincronizar()} />
+        }
+      >
+        <Card>
+          <Text style={styles.etiqueta}>
+            {payday.kind === 'quincena' ? 'Pago de quincena' : 'Pago de fin de mes'}
+          </Text>
+          <Text style={styles.monto}>
+            {distribucion ? formatearColones(distribucion.remanente) : '—'}
+          </Text>
+          <Text style={styles.pie}>
+            {distribucion
+              ? 'Remanente después de gastos fijos'
+              : 'Ingresá la colilla para ver el remanente'}
+          </Text>
+          {payday.movedFromWeekend ? (
+            <View style={styles.aviso}>
+              <Text style={styles.avisoTexto}>
+                El día {payday.nominalDay} cae en fin de semana: el pago se adelanta al
+                viernes.
+              </Text>
+            </View>
+          ) : null}
+        </Card>
+
+        <View style={styles.seccion}>
+          <SectionHeader titulo="Colilla" />
+          <Card>
+            {ventanaAbierta ? (
+              <View style={styles.formulario}>
+                <TextInput
+                  style={styles.input}
+                  value={texto}
+                  onChangeText={setTexto}
+                  keyboardType="number-pad"
+                  placeholder="Monto de la colilla"
+                  placeholderTextColor={colors.labelTertiary}
+                  accessibilityLabel="Monto de la colilla"
+                />
+                <PrimaryButton titulo="Calcular distribución" onPress={aplicarColilla} />
+              </View>
+            ) : (
+              <Text style={styles.bloqueado}>
+                El ingreso se habilita 48 horas antes del pago, el {fechaLegible(abreEl)}.
+              </Text>
+            )}
+          </Card>
+        </View>
+
+        <View style={styles.seccion}>
+          <SectionHeader titulo="Gastos fijos" />
+          <Card sinRelleno>
+            <ListRow titulo="Casa" valor={formatearColones(gastosFijos.casa)} />
+            <ListRow titulo="Comida" valor={formatearColones(gastosFijos.comida)} />
+            <ListRow titulo="Pases" valor={formatearColones(gastosFijos.pases)} />
+            <ListRow
+              titulo="Deuda base"
+              valor={formatearColones(gastosFijos.deudaBase)}
+              ultima
+            />
+          </Card>
+        </View>
+
+        {distribucion ? (
+          <View style={styles.seccion}>
+            <SectionHeader titulo="Distribución" />
+            <Card sinRelleno>
+              <ListRow
+                titulo="Total gastos fijos"
+                valor={formatearColones(distribucion.totalGastosFijos)}
+              />
+              <ListRow
+                titulo="Reserva de seguridad"
+                detalle={`Banda ${formatearColones(distribucion.banda.min)} – ${formatearColones(distribucion.banda.max)}`}
+                valor={formatearColones(distribucion.reserva)}
+              />
+              <ListRow
+                titulo="Abono a capital"
+                detalle={
+                  distribucion.estado === 'holgado'
+                    ? `Rango ${formatearColones(distribucion.abonoCapitalRango.min)} – ${formatearColones(distribucion.abonoCapitalRango.max)}`
+                    : undefined
+                }
+                valor={formatearColones(distribucion.abonoCapitalSugerido)}
+                tono="positivo"
+              />
+              <ListRow
+                titulo={ETIQUETAS_ESTADO[distribucion.estado].texto}
+                valor={
+                  distribucion.faltante > 0
+                    ? `Faltan ${formatearColones(distribucion.faltante)}`
+                    : undefined
+                }
+                tono={ETIQUETAS_ESTADO[distribucion.estado].tono}
+                ultima
+              />
+            </Card>
+          </View>
+        ) : null}
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  pantalla: { flex: 1, backgroundColor: colors.background },
+  contenido: { padding: spacing.lg, gap: spacing.xl, paddingBottom: spacing.xxxl },
+  seccion: { gap: 0 },
+  etiqueta: { ...typography.footnote, color: colors.labelSecondary },
+  monto: { ...typography.amount, color: colors.label, marginTop: spacing.xs },
+  pie: { ...typography.footnote, color: colors.labelSecondary, marginTop: spacing.xs },
+  aviso: {
+    marginTop: spacing.lg,
+    backgroundColor: colors.orangeSoft,
+    borderRadius: radius.md,
+    padding: spacing.md,
+  },
+  avisoTexto: { ...typography.footnote, color: colors.label },
+  formulario: { gap: spacing.lg },
+  input: {
+    ...typography.title3,
+    backgroundColor: colors.fill,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    color: colors.label,
+  },
+  bloqueado: { ...typography.subheadline, color: colors.labelSecondary },
+});
