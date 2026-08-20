@@ -74,21 +74,29 @@ jobs:
           restore-keys: |
             gradle-${{ runner.os }}-
 
-      # assembleDebug no requiere keystore de firma: Gradle usa el keystore de
-      # depuración que genera automáticamente. Alcanza para instalar el APK en
-      # un teléfono o repartirlo para pruebas. Para publicar en Play Store hace
-      # falta configurar signingConfigs.release con un keystore propio y correr
-      # assembleRelease en su lugar.
-      - name: Compilar el APK (assembleDebug)
+      # assembleDebug NO sirve para instalar el APK como app suelta: ese build
+      # deja el JS fuera del paquete y el runtime intenta conectarse a Metro en
+      # localhost:8081 al abrir, lo que da "Unable to load script" en cualquier
+      # teléfono que no tenga el cable USB con `adb reverse` corriendo. Solo es
+      # válido para desarrollo iterativo con `expo start` activo en la máquina.
+      #
+      # assembleRelease sí empaqueta el bundle de JS dentro del APK (tarea de
+      # Gradle bundleReleaseJsAndAssets), así que arranca solo, sin Metro. El
+      # release firma con el keystore de depuración por defecto (ver
+      # signingConfigs.release en android/app/build.gradle tras el prebuild),
+      # así que tampoco hace falta un keystore propio para este paso. Antes de
+      # publicar en Play Store sí hace falta reemplazar esa firma por una
+      # propia.
+      - name: Compilar el APK (assembleRelease)
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          ./gradlew assembleRelease --no-daemon --stacktrace
 
       - name: Publicar el APK como artefacto
         uses: actions/upload-artifact@v4
         with:
-          name: app-de-finanza-debug-apk
-          path: android/app/build/outputs/apk/debug/*.apk
+          name: app-de-finanza-release-apk
+          path: android/app/build/outputs/apk/release/*.apk
           if-no-files-found: error
           retention-days: 14
