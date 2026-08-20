@@ -85,6 +85,14 @@ jobs:
       # baja la memoria pico total en vez de subirla más.
       - name: Ampliar memoria de la JVM de Gradle para KSP
         run: |
+          # expo prebuild genera gradle.properties SIN salto de línea final
+          # (termina en "...watchedDirectories=[]" a secas). Un ">>" sobre eso
+          # concatena la primera línea nueva al final de esa última línea en
+          # vez de empezar una propia, lo que corrompe ese valor y hace que
+          # expo-modules-autolinking reciba basura donde espera "[]" y explote
+          # al parsearlo como JSON. El printf inicial garantiza el salto de
+          # línea sin importar si el archivo ya terminaba en uno o no.
+          printf '\n' >> android/gradle.properties
           {
             echo "org.gradle.jvmargs=-Xmx3072m -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8"
             echo "org.gradle.workers.max=2"
