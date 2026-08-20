@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { colors, spacing, typography } from '../theme';
 
@@ -6,15 +7,17 @@ interface Props {
   readonly accion?: string;
 }
 
-/** Encabezado de sección en mayúsculas, como las listas agrupadas de iOS. */
-export function SectionHeader({ titulo, accion }: Props) {
+/** Encabezado de sección en mayúsculas, como las listas agrupadas de iOS.
+ * Solo recibe props primitivas (sin `children`), así que memoizar sí evita
+ * re-renders reales cuando el resto de la pantalla cambia. */
+export const SectionHeader = memo(function SectionHeader({ titulo, accion }: Props) {
   return (
     <View style={styles.contenedor}>
       <Text style={styles.titulo}>{titulo.toUpperCase()}</Text>
       {accion ? <Text style={styles.accion}>{accion}</Text> : null}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   contenedor: {

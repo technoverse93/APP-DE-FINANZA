@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, spacing, typography } from '../theme';
 
@@ -18,8 +19,21 @@ const TONOS = {
   atencion: colors.orange,
 } as const;
 
-/** Fila de lista agrupada, con separador que respeta la sangría del título. */
-export function ListRow({ titulo, valor, detalle, tono = 'normal', onPress, ultima }: Props) {
+/**
+ * Fila de lista agrupada, con separador que respeta la sangría del título.
+ * Memoizada: es el componente que más se repite en pantalla (movimientos,
+ * deudas, resúmenes), así que evitar su re-render cuando sus props no
+ * cambiaron es lo que más rinde para mantener 60fps en hardware de gama
+ * baja.
+ */
+export const ListRow = memo(function ListRow({
+  titulo,
+  valor,
+  detalle,
+  tono = 'normal',
+  onPress,
+  ultima,
+}: Props) {
   const contenido = (
     <View style={styles.fila}>
       <View style={styles.textos}>
@@ -45,7 +59,7 @@ export function ListRow({ titulo, valor, detalle, tono = 'normal', onPress, ulti
       )}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   fila: {

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { View, StyleSheet, type LayoutChangeEvent } from 'react-native';
 import Svg, { Path, Circle, Line } from 'react-native-svg';
 import { colors, spacing } from '../theme';
@@ -16,13 +16,17 @@ interface Props {
  * de línea y un punto final, el costo de una dependencia grande (con su
  * propia gestión de temas, leyendas y animaciones que no usamos) no se
  * justifica frente a un puñado de líneas de SVG propio.
+ *
+ * Memoizado igual que CandlestickChart: el cálculo de la geometría en
+ * `construirTrazado` es el más caro de la pantalla y no debería repetirse
+ * cuando `precios` no cambió.
  */
-export function PriceChart({ precios, height = 160 }: Props) {
+export const PriceChart = memo(function PriceChart({ precios, height = 160 }: Props) {
   const [ancho, setAncho] = useState(0);
 
-  const onLayout = (e: LayoutChangeEvent) => {
+  const onLayout = useCallback((e: LayoutChangeEvent) => {
     setAncho(e.nativeEvent.layout.width);
-  };
+  }, []);
 
   const trazado = useMemo(() => construirTrazado(precios, ancho, height), [precios, ancho, height]);
 
@@ -48,7 +52,7 @@ export function PriceChart({ precios, height = 160 }: Props) {
       </Svg>
     </View>
   );
-}
+});
 
 function construirTrazado(
   precios: readonly number[],

@@ -1,4 +1,4 @@
-import { memo, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { View, StyleSheet, type LayoutChangeEvent } from 'react-native';
 import Svg, { G, Rect, Line } from 'react-native-svg';
 import { colors, spacing } from '../theme';
@@ -34,9 +34,9 @@ interface VelaGeometria {
 export const CandlestickChart = memo(function CandlestickChart({ velas, height = 200 }: Props) {
   const [ancho, setAncho] = useState(0);
 
-  const onLayout = (e: LayoutChangeEvent) => {
+  const onLayout = useCallback((e: LayoutChangeEvent) => {
     setAncho(e.nativeEvent.layout.width);
-  };
+  }, []);
 
   const geometria = useMemo(
     () => construirGeometria(velas, ancho, height),
