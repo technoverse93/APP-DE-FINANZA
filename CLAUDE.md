@@ -57,7 +57,9 @@ Reglas del flujo:
   git push --force-with-lease
   ```
 
-- Abrir el PR, revisar que los checks de CI no muestren bloqueos reales, y
-  fusionar con **squash**.
+- Abrir el PR **siempre con `base: main` explícito**, nunca dejando que GitHub
+  elija la base por defecto.
+- Revisar que los checks de CI no muestren bloqueos reales, y fusionar con
+  **squash**.
 - Si el push falla por un error de red, reintentar hasta 4 veces con espera
   creciente (2s, 4s, 8s, 16s).
