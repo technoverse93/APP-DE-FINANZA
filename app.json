@@ -30,7 +30,22 @@
         {
           "faceIDPermission": "Se usa tu biometría para desbloquear la aplicación."
         }
-      ]
-    ]
+      ],
+      "expo-updates"
+    ],
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0,
+      "url": "https://u.expo.dev/REEMPLAZA_CON_TU_EAS_PROJECT_ID"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "REEMPLAZA_CON_TU_EAS_PROJECT_ID"
+      }
+    }
   }
 }

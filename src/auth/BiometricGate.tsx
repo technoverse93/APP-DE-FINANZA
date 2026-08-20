@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   AppState,
   AppStateStatus,
+  InteractionManager,
   Pressable,
   StyleSheet,
   Text,
@@ -103,7 +104,16 @@ export function BiometricGate({ children }: Props) {
   }, []);
 
   useEffect(() => {
-    void autenticar();
+    // BiometricPrompt (el diálogo nativo detrás de authenticateAsync) necesita
+    // una ventana ya adjunta y con foco. Justo tras un arranque en frío la
+    // Activity puede seguir animando su primer layout; invocar el hardware en
+    // ese instante falla en silencio o cuelga la promesa en algunos OEMs.
+    // runAfterInteractions espera a que termine el primer pintado/animaciones
+    // antes de disparar el prompt.
+    const tarea = InteractionManager.runAfterInteractions(() => {
+      void autenticar();
+    });
+    return () => tarea.cancel();
   }, [autenticar]);
 
   // Al salir de la app se corta la red y se exige la huella de nuevo al volver.

@@ -21,12 +21,15 @@ jobs:
   build-android:
     name: Compilar APK de Android
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     env:
       # Variables públicas que el bundle de JS necesita en tiempo de ejecución.
-      # Si no hay secretos configurados en el repo, quedan vacías: el bundling
-      # de Metro es estático y no ejecuta este código, así que no rompe el build.
+      # Si no hay secretos configurados en el repo, quedan vacías. Eso no
+      # rompe ESTE paso (el bundling de Metro es estático, no ejecuta el
+      # código), pero src/lib/supabase.ts degrada a un cliente sin operar en
+      # ese caso: la app abre igual, solo las funciones que dependen de
+      # Supabase quedan inactivas hasta que se configuren los secretos reales.
       EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
       EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
 
@@ -64,6 +67,42 @@ jobs:
       - name: Generar el proyecto nativo de Android (expo prebuild)
         run: npx expo prebuild --platform android --no-install
 
+      # expo-updates procesa Kotlin con KSP, que es bastante más pesado en
+      # memoria que los módulos puramente Java que la app compilaba antes de
+      # tener OTA. Con el heap/metaspace por defecto que trae la plantilla
+      # (-Xmx2048m -XX:MaxMetaspaceSize=512m) la tarea kspReleaseKotlin revienta
+      # con "OutOfMemoryError: Metaspace". La línea repetida en gradle.properties
+      # gana sobre la de la plantilla: Java Properties procesa el archivo en
+      # orden y la última que ve para una misma clave es la que queda.
+      #
+      # Un primer intento subió el heap a 4096m/1024m y quedó peor: con
+      # org.gradle.parallel=true (default de la plantilla) Gradle compila varios
+      # módulos Kotlin/KSP a la vez, cada uno en su propio proceso; sumado al
+      # heap más grande del propio daemon, la memoria total del runner se
+      # agotó y el kernel mató un proceso `node` de la fase de configuración
+      # sin que imprimiera nada (por eso el log no mostraba ningún error real,
+      # solo "exit value 1"). Por eso acá se limita también org.gradle.workers.max:
+      # baja la memoria pico total en vez de subirla más.
+      - name: Ampliar memoria de la JVM de Gradle para KSP
+        run: |
+          # expo prebuild genera gradle.properties SIN salto de línea final
+          # (termina en "...watchedDirectories=[]" a secas). Un ">>" sobre eso
+          # concatena la primera línea nueva al final de esa última línea en
+          # vez de empezar una propia, lo que corrompe ese valor y hace que
+          # expo-modules-autolinking reciba basura donde espera "[]" y explote
+          # al parsearlo como JSON. El printf inicial garantiza el salto de
+          # línea sin importar si el archivo ya terminaba en uno o no.
+          printf '\n' >> android/gradle.properties
+          {
+            echo "org.gradle.jvmargs=-Xmx3072m -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8"
+            echo "org.gradle.workers.max=2"
+          } >> android/gradle.properties
+
+      - name: Memoria y disco disponibles antes de compilar
+        run: |
+          free -h
+          df -h /
+
       - name: Cachear dependencias de Gradle
         uses: actions/cache@v4
         with:
@@ -87,11 +126,29 @@ jobs:
       # así que tampoco hace falta un keystore propio para este paso. Antes de
       # publicar en Play Store sí hace falta reemplazar esa firma por una
       # propia.
+      # --info va a un archivo (no directo al log del step) porque a ese nivel
+      # de verbosidad un build de Android/Kotlin completo puede pesar decenas
+      # de MB; si falla, el paso siguiente solo imprime la parte que importa.
+      # Es diagnóstico temporal: el fallo actual (un proceso node interno de
+      # expo-modules-autolinking muere sin imprimir nada, ni con --stacktrace)
+      # no se pudo reproducir aislado ni con las mismas rutas/env vars/versión
+      # de dependencias que usa CI, así que hace falta ver la salida real del
+      # subproceso que Gradle normalmente descarta.
       - name: Compilar el APK (assembleRelease)
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon --stacktrace
+          ./gradlew assembleRelease --no-daemon --stacktrace --info > /tmp/gradle-build.log 2>&1 || GRADLE_EXIT=$?
+          exit "${GRADLE_EXIT:-0}"
+
+      - name: Detalle del fallo de Gradle (solo si el paso anterior falló)
+        if: failure()
+        run: |
+          echo "=== Contexto alrededor de mirror-kotlin-inline-modules (si aparece) ==="
+          grep -n -B10 -A100 "mirror-kotlin-inline-modules" /tmp/gradle-build.log | head -400
+          echo ""
+          echo "=== Últimas 300 líneas del log completo, por si el fallo es otro ==="
+          tail -n 300 /tmp/gradle-build.log
 
       - name: Publicar el APK como artefacto
         uses: actions/upload-artifact@v4
