@@ -4,7 +4,7 @@ import { BiometricGate } from './src/auth/BiometricGate';
 import { ErrorBoundary } from './src/components';
 import { registrarTareaDeFondo } from './src/lib/backgroundSync';
 import { comprobarActualizacion } from './src/lib/updates';
-import { ResumenScreen } from './src/screens/ResumenScreen';
+import { RootTabs } from './src/navigation/RootTabs';
 
 /**
  * Raíz de la aplicación.
@@ -12,8 +12,15 @@ import { ResumenScreen } from './src/screens/ResumenScreen';
  * `ErrorBoundary` envuelve todo, incluida la puerta biométrica: es la última
  * red antes de que una excepción de render llegue al runtime nativo y cierre
  * el proceso. Dentro de eso, `BiometricGate` sigue siendo el candado real —
- * sin huella válida no se monta ninguna pantalla ni se abre la red hacia
- * Supabase.
+ * sin huella válida no se monta ninguna pantalla, no se abre la red hacia
+ * Supabase, y por lo tanto tampoco corre ninguna pantalla de datos en vivo
+ * (inversión incluida).
+ *
+ * La comprobación de actualizaciones OTA corre una sola vez al montar, en su
+ * propio try/catch, independiente del resto: no es un poll recurrente que
+ * compita con las pantallas por red, así que no puede interrumpir ni
+ * demorar la carga de datos de mercado en tiempo real de la pantalla de
+ * Inversión.
  */
 export default function App() {
   useEffect(() => {
@@ -28,7 +35,7 @@ export default function App() {
     <ErrorBoundary>
       <BiometricGate>
         <StatusBar style="dark" />
-        <ResumenScreen />
+        <RootTabs />
       </BiometricGate>
     </ErrorBoundary>
   );

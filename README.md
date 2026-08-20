@@ -1,8 +1,10 @@
-# APP-DE-FINANZA
+# Finanzas
 
-Aplicación de finanzas personales en React Native/Expo con Supabase. Captura
-gastos leyendo comprobantes de SINPE y del BCR directamente desde el correo, y
-distribuye la nómina quincenal protegiendo un margen de seguridad.
+Aplicación de finanzas personales en React Native/Expo con Supabase, con el
+logo y los colores de marca de Technoverse. Captura gastos leyendo
+comprobantes de SINPE y del BCR directamente desde el correo, distribuye la
+nómina quincenal protegiendo un margen de seguridad, y proyecta una inversión
+en el S&P 500 con datos reales de mercado.
 
 ## Arquitectura
 
@@ -115,6 +117,38 @@ Publicar una actualización, una vez configurado:
 eas update --branch production --message "descripción del cambio"
 ```
 
+## Módulo de inversión
+
+El indicador de riesgo, el rendimiento anualizado y la proyección de interés
+compuesto se calculan exclusivamente sobre cierres reales de mercado — nunca
+sobre un supuesto fijo en el código. Si no hay suficientes cotizaciones
+cargadas, la pantalla lo dice explícitamente en vez de mostrar un número
+inventado (`src/core/investment/risk.ts` y `compoundInterest.ts` tiran una
+excepción en vez de rellenar con un valor por defecto).
+
+```
+Alpha Vantage ─→ Edge Function market-data (Deno) ─→ market_quotes ─→ App
+                        ▲
+                        │
+              pg_cron cada 4 horas
+```
+
+La clave de Alpha Vantage vive en Supabase Vault (`alpha_vantage_api_key`) y
+nunca llega al teléfono: el cliente solo lee `market_quotes`, ya cacheada.
+Se usa SPY (el ETF que replica el S&P 500) porque el endpoint gratuito de
+Alpha Vantage no expone el índice `^GSPC` de forma confiable.
+
+El tier gratuito de Alpha Vantage limita a 25 llamadas por día — por eso el
+refresco es cada 4 horas (6 llamadas/día) y no cada pocos minutos. Es
+honesto llamarlo "datos reales, refrescados periódicamente"; llamarlo
+"tiempo real" en el sentido de un stream tick a tick requeriría un plan
+pago, que esta app no asume que exista.
+
+El aporte periódico y el capital ya invertido (`inversion_config`) son datos
+reales que declara el usuario, no una constante — la proyección de interés
+compuesto los combina con el rendimiento anualizado calculado sobre los
+cierres reales ya cargados.
+
 ## Puesta en marcha
 
 ```bash
@@ -123,21 +157,25 @@ cp .env.example .env        # completar URL y anon key
 npm start                   # Expo
 ```
 
-Base de datos y función:
+Base de datos y funciones:
 
 ```bash
-supabase db push                        # migraciones 0001 y 0002
+supabase db push                        # migraciones 0001-0005
 supabase functions deploy email-sync
+supabase functions deploy market-data
 ```
 
 Antes de que el cron funcione hay que cargar en Vault los secretos
-`edge_url_email_sync` y `service_role_key`, más el secreto de cada cuenta de
-correo referenciado por `cuentas_correo.secreto_ref`.
+`edge_url_email_sync`, `edge_url_market_data`, `service_role_key`, el secreto
+de cada cuenta de correo referenciado por `cuentas_correo.secreto_ref`, y
+`alpha_vantage_api_key` (una clave gratuita de
+[alphavantage.co](https://www.alphavantage.co/support/#api-key)) para el
+módulo de inversión.
 
 ## Verificación
 
 ```bash
-npm test        # 83 pruebas: calendario, distribución, parsing, IMAP
+npm test        # 108 pruebas: calendario, distribución, parsing, IMAP, riesgo/interés compuesto
 npm run typecheck
 ```
 
@@ -146,7 +184,8 @@ Las Edge Functions se verifican aparte, con `deno check supabase/functions/_shar
 ## Estado
 
 Implementado y probado: motor quincenal, calendario de pagos, parsing de
-correos con filtro del BAC, cliente IMAP, puerta biométrica, design system y
+correos con filtro del BAC, cliente IMAP, puerta biométrica, design system,
+navegación por tabs, módulo de inversión con datos reales de mercado, y
 esquema de base de datos.
 
 Pendiente de datos reales: los patrones de extracción de monto, referencia y

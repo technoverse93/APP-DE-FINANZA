@@ -35,11 +35,45 @@ export function redDesbloqueada(): boolean {
   return desbloqueado;
 }
 
+/** Milisegundos máximos para cualquier petición a Supabase. */
+const TIMEOUT_RED_MS = 15_000;
+
+export class RedSinRespuestaError extends Error {
+  constructor() {
+    super(`La red no respondió en ${TIMEOUT_RED_MS / 1000} segundos`);
+    this.name = 'RedSinRespuestaError';
+  }
+}
+
+/**
+ * Sin este timeout, una conexión que se cuelga (servidor caído a mitad de
+ * TCP, un proxy que nunca cierra el túnel) deja cualquier pantalla que
+ * dependa de Supabase girando el spinner para siempre: `fetch` no tiene
+ * timeout propio y una promesa que nunca se resuelve nunca dispara el
+ * `catch` del componente. Se detectó al ver `useMarketData` quedarse
+ * cargando indefinidamente contra una red caída.
+ */
+const fetchConTimeout: typeof fetch = (input, init) => {
+  return new Promise((resolve, reject) => {
+    const id = setTimeout(() => reject(new RedSinRespuestaError()), TIMEOUT_RED_MS);
+    fetch(input, init).then(
+      (respuesta) => {
+        clearTimeout(id);
+        resolve(respuesta);
+      },
+      (error) => {
+        clearTimeout(id);
+        reject(error);
+      },
+    );
+  });
+};
+
 const fetchConCandado: typeof fetch = (input, init) => {
   if (!desbloqueado) {
     return Promise.reject(new AppBloqueadaError());
   }
-  return fetch(input, init);
+  return fetchConTimeout(input, init);
 };
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;

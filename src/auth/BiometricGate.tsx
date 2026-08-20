@@ -76,7 +76,7 @@ export function BiometricGate({ children }: Props) {
       }
 
       const resultado = await LocalAuthentication.authenticateAsync({
-        promptMessage: 'Desbloqueá Finanza con tu huella',
+        promptMessage: 'Desbloqueá Finanzas con tu huella',
         cancelLabel: 'Cancelar',
         // Sin respaldo por PIN ni contraseña: la huella es el único acceso.
         disableDeviceFallback: true,
@@ -135,7 +135,7 @@ export function BiometricGate({ children }: Props) {
   return (
     <View style={styles.contenedor}>
       <View style={styles.tarjeta}>
-        <Text style={styles.titulo}>Finanza</Text>
+        <Text style={styles.titulo}>Finanzas</Text>
 
         {estado.fase === 'verificando' && (
           <>
