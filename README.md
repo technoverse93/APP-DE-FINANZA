@@ -80,6 +80,41 @@ Al mandar la app a segundo plano se vuelve a cortar la red y a exigir la huella.
 
 Todas las tablas llevan RLS con políticas por `auth.uid()`.
 
+`src/lib/supabase.ts` nunca lanza una excepción a nivel de módulo, ni siquiera
+si faltan las variables de entorno: ese archivo se importa de forma estática
+desde `App.tsx`, así que un `throw` ahí mata la app entera antes de que React
+monte una sola pantalla — se ve como un cierre inmediato al abrirla, sin
+ErrorBoundary que lo pueda atrapar. Si faltan las variables, `supabase`
+degrada a un cliente que rechaza cualquier operación (capturado por el mismo
+manejo de errores que ya existe en `useQuincena`/`backgroundSync`) en vez de
+crashear. `ErrorBoundary` en la raíz es la red de último recurso para
+cualquier otra excepción de render que se escape.
+
+## Actualizaciones OTA (EAS Update)
+
+`app.json` ya tiene `runtimeVersion`, `updates` y el plugin `expo-updates`
+configurados, y `App.tsx` llama `comprobarActualizacion()` al montar (con
+cada paso en su propio try/catch: sin red, con el servidor caído, o con un
+bundle corrupto a mitad de descarga, la app sigue con el bundle local).
+
+Falta un solo dato que no se puede generar sin una cuenta de Expo: el
+`projectId` real. `app.json` lo deja como placeholder explícito
+(`REEMPLAZA_CON_TU_EAS_PROJECT_ID`) en `updates.url` y en
+`extra.eas.projectId` — con ese placeholder la comprobación de actualizaciones
+simplemente falla (de forma segura) y la app sigue funcionando con el bundle
+local, igual que sin red. Para activarlo de verdad:
+
+```bash
+eas login
+eas init          # crea el proyecto y escribe el projectId real en app.json
+```
+
+Publicar una actualización, una vez configurado:
+
+```bash
+eas update --branch production --message "descripción del cambio"
+```
+
 ## Puesta en marcha
 
 ```bash
