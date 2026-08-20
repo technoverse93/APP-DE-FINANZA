@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { DeudasScreen } from '../screens/DeudasScreen';
 import { InversionScreen } from '../screens/InversionScreen';
 import { ResumenScreen } from '../screens/ResumenScreen';
 import { colors, typography } from '../theme';
@@ -16,6 +17,7 @@ import { colors, typography } from '../theme';
 
 export type RootTabParamList = {
   Inicio: undefined;
+  Deudas: undefined;
   Inversión: undefined;
 };
 
@@ -35,6 +37,7 @@ const temaNavegacion = {
 
 const ICONOS: Record<keyof RootTabParamList, { activo: keyof typeof Ionicons.glyphMap; inactivo: keyof typeof Ionicons.glyphMap }> = {
   Inicio: { activo: 'home', inactivo: 'home-outline' },
+  Deudas: { activo: 'flame', inactivo: 'flame-outline' },
   Inversión: { activo: 'trending-up', inactivo: 'trending-up-outline' },
 };
 
@@ -64,6 +67,7 @@ export function RootTabs() {
         })}
       >
         <Tab.Screen name="Inicio" component={ResumenScreen} />
+        <Tab.Screen name="Deudas" component={DeudasScreen} />
         <Tab.Screen name="Inversión" component={InversionScreen} />
       </Tab.Navigator>
     </NavigationContainer>
