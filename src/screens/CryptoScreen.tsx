@@ -13,7 +13,7 @@ import { BlurHeader, Card, CandlestickChart, ListRow, PrimaryButton, SectionHead
 import { formatearColones } from '../core/payroll/distribution';
 import { gananciaNoRealizada } from '../core/crypto/paperTrading';
 import type { ResultadoSenal, Senal } from '../core/crypto/signals';
-import { useCryptoConfig, type ModoCripto } from '../state/useCryptoConfig';
+import { useCryptoConfig, type EntornoReal, type ModoCripto } from '../state/useCryptoConfig';
 import { useCryptoData } from '../state/useCryptoData';
 import { useCryptoMovimientos } from '../state/useCryptoMovimientos';
 import type { MovimientoCripto } from '../core/crypto/paperTrading';
@@ -88,12 +88,14 @@ export function CryptoScreen() {
     comprar,
     vender,
     recargar: recargarMovimientos,
-  } = useCryptoMovimientos(config.modo, config.moneda, config.capitalVirtualInicial);
+  } = useCryptoMovimientos(config.modo, config.moneda, config.capitalVirtualInicial, config.entornoReal);
 
   const [textoCantidad, setTextoCantidad] = useState('');
   const [textoPrecio, setTextoPrecio] = useState('');
 
   const ultimoPrecio = velas.length > 0 ? velas[velas.length - 1].cierre : null;
+  const esReal = config.modo === 'real';
+  const esMainnet = config.entornoReal === 'mainnet';
 
   const cambiarModo = useCallback(
     (modo: ModoCripto) => {
@@ -102,20 +104,30 @@ export function CryptoScreen() {
     [config, guardar],
   );
 
+  const cambiarEntorno = useCallback(
+    (entornoReal: EntornoReal) => {
+      void guardar({ ...config, entornoReal });
+    },
+    [config, guardar],
+  );
+
   const cantidad = limpiarNumero(textoCantidad);
   const precio = precioIngresadoOUltimo(textoPrecio, ultimoPrecio);
+  // En Real es una orden de mercado: el precio lo pone Binance al ejecutar,
+  // no un valor que se escriba acá. Solo Simulación exige un precio propio.
+  const puedeEjecutar = esReal ? cantidad > 0 : cantidad > 0 && precio > 0;
 
   const ejecutarCompra = useCallback(() => {
-    if (cantidad <= 0 || precio <= 0) return;
-    void comprar(cantidad, precio);
+    if (!puedeEjecutar) return;
+    void (esReal ? comprar(cantidad) : comprar(cantidad, precio));
     setTextoCantidad('');
-  }, [cantidad, precio, comprar]);
+  }, [puedeEjecutar, esReal, cantidad, precio, comprar]);
 
   const ejecutarVenta = useCallback(() => {
-    if (cantidad <= 0 || precio <= 0) return;
-    void vender(cantidad, precio);
+    if (!puedeEjecutar) return;
+    void (esReal ? vender(cantidad) : vender(cantidad, precio));
     setTextoCantidad('');
-  }, [cantidad, precio, vender]);
+  }, [puedeEjecutar, esReal, cantidad, precio, vender]);
 
   const ganancia = useMemo(
     () => (ultimoPrecio !== null ? gananciaNoRealizada(estado, ultimoPrecio) : 0),
@@ -154,8 +166,33 @@ export function CryptoScreen() {
             <Text style={styles.avisoModo}>
               {config.modo === 'simulacion'
                 ? 'Opera contra un capital virtual propio. No mueve dinero real.'
-                : 'Anotá acá las compras y ventas que ya hiciste en tu propio exchange. La app nunca ejecuta órdenes por vos.'}
+                : 'Comprar/Vender envía una orden de mercado real a Binance con tu propia API key. Solo se ejecuta cuando vos tocás el botón — nunca en automático.'}
             </Text>
+
+            {esReal ? (
+              <>
+                <View style={[styles.filaTipo, styles.filaEntorno]}>
+                  <Text
+                    onPress={() => cambiarEntorno('testnet')}
+                    style={[styles.chip, config.entornoReal === 'testnet' && styles.chipActivo]}
+                  >
+                    Testnet (fondos ficticios)
+                  </Text>
+                  <Text
+                    onPress={() => cambiarEntorno('mainnet')}
+                    style={[styles.chip, esMainnet && styles.chipActivoRiesgo]}
+                  >
+                    Mainnet (dinero real)
+                  </Text>
+                </View>
+                {esMainnet ? (
+                  <Text style={styles.avisoRiesgo}>
+                    Mainnet ejecuta órdenes con dinero real de tu cuenta de Binance. Verificá la
+                    cantidad antes de tocar Comprar/Vender: no hay confirmación adicional.
+                  </Text>
+                ) : null}
+              </>
+            ) : null}
           </Card>
         </View>
 
@@ -217,7 +254,9 @@ export function CryptoScreen() {
         </View>
 
         <View style={styles.seccion}>
-          <SectionHeader titulo={config.modo === 'simulacion' ? 'Comprar / vender (simulado)' : 'Anotar movimiento real'} />
+          <SectionHeader
+            titulo={esReal ? `Comprar / vender (${config.entornoReal === 'mainnet' ? 'real' : 'testnet'})` : 'Comprar / vender (simulado)'}
+          />
           <Card>
             <View style={styles.formulario}>
               {errorMovimientos ? <Text style={styles.mensajeError}>{errorMovimientos}</Text> : null}
@@ -229,20 +268,26 @@ export function CryptoScreen() {
                 placeholder={`Cantidad de ${config.moneda}`}
                 placeholderTextColor={colors.labelTertiary}
               />
-              <TextInput
-                style={styles.input}
-                value={textoPrecio}
-                onChangeText={setTextoPrecio}
-                keyboardType="number-pad"
-                placeholder={ultimoPrecio ? `Precio unitario (último: ${formatearColones(ultimoPrecio)})` : 'Precio unitario'}
-                placeholderTextColor={colors.labelTertiary}
-              />
+              {esReal ? (
+                <Text style={styles.etiquetaCampo}>
+                  Orden de mercado: el precio de ejecución lo pone Binance al momento del llenado.
+                </Text>
+              ) : (
+                <TextInput
+                  style={styles.input}
+                  value={textoPrecio}
+                  onChangeText={setTextoPrecio}
+                  keyboardType="number-pad"
+                  placeholder={ultimoPrecio ? `Precio unitario (último: ${formatearColones(ultimoPrecio)})` : 'Precio unitario'}
+                  placeholderTextColor={colors.labelTertiary}
+                />
+              )}
               <View style={styles.filaBotones}>
                 <View style={styles.botonMitad}>
-                  <PrimaryButton titulo="Comprar" onPress={ejecutarCompra} deshabilitado={cantidad <= 0 || precio <= 0} />
+                  <PrimaryButton titulo="Comprar" onPress={ejecutarCompra} deshabilitado={!puedeEjecutar} />
                 </View>
                 <View style={styles.botonMitad}>
-                  <PrimaryButton titulo="Vender" onPress={ejecutarVenta} deshabilitado={cantidad <= 0 || precio <= 0} />
+                  <PrimaryButton titulo="Vender" onPress={ejecutarVenta} deshabilitado={!puedeEjecutar} />
                 </View>
               </View>
             </View>
@@ -302,7 +347,18 @@ const styles = StyleSheet.create({
     color: colors.labelInverse,
     backgroundColor: colors.brandGold,
   },
+  chipActivoRiesgo: {
+    color: colors.labelInverse,
+    backgroundColor: colors.red,
+  },
   avisoModo: { ...typography.footnote, color: colors.labelSecondary, marginTop: spacing.sm },
+  filaEntorno: { marginTop: spacing.md },
+  avisoRiesgo: {
+    ...typography.footnote,
+    color: colors.red,
+    marginTop: spacing.sm,
+  },
+  etiquetaCampo: { ...typography.footnote, color: colors.labelSecondary },
   input: {
     ...typography.body,
     backgroundColor: colors.fill,

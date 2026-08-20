@@ -8,7 +8,7 @@ import {
   type MovimientoCripto,
   type TipoMovimientoCripto,
 } from '../core/crypto/paperTrading';
-import type { ModoCripto } from './useCryptoConfig';
+import type { EntornoReal, ModoCripto } from './useCryptoConfig';
 
 interface MovimientoRegistrado extends MovimientoCripto {
   readonly id: string;
@@ -21,11 +21,22 @@ interface MovimientoRegistrado extends MovimientoCripto {
  *
  * En Simulación el capital de partida es virtual y esta capa lo hace
  * cumplir (`puedeComprar`/`puedeVender` bloquean lo que excede la
- * billetera). En Real no hay un capital que la app administre: el usuario
- * anota lo que efectivamente hizo en su propio exchange, así que aquí no se
- * bloquea nada — mismo criterio que el Libro Mayor con los gastos reales.
+ * billetera): el usuario elige la cantidad y el precio, y el movimiento se
+ * guarda directo.
+ *
+ * En Real, comprar/vender invoca la Edge Function `binance-order`, que
+ * envía una orden de mercado real a Binance (testnet o mainnet según
+ * `entornoReal`) y, si se ejecuta, inserta ella misma el movimiento con el
+ * precio real de llenado — nunca con un precio que el usuario haya
+ * tecleado. Sigue siendo 100% iniciado por el usuario: esta función solo
+ * corre cuando se toca "Comprar"/"Vender" en la pantalla.
  */
-export function useCryptoMovimientos(modo: ModoCripto, moneda: string, capitalVirtualInicial: number) {
+export function useCryptoMovimientos(
+  modo: ModoCripto,
+  moneda: string,
+  capitalVirtualInicial: number,
+  entornoReal: EntornoReal,
+) {
   const [movimientos, setMovimientos] = useState<MovimientoRegistrado[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -66,18 +77,17 @@ export function useCryptoMovimientos(modo: ModoCripto, moneda: string, capitalVi
     [modo, capitalVirtualInicial, movimientos],
   );
 
-  const registrar = useCallback(
+  const registrarSimulado = useCallback(
     async (tipo: TipoMovimientoCripto, cantidad: number, precioUnitario: number) => {
-      if (modo === 'simulacion') {
-        const permitido = tipo === 'compra' ? puedeComprar(estado, cantidad, precioUnitario) : puedeVender(estado, cantidad);
-        if (!permitido) {
-          setError(
-            tipo === 'compra'
-              ? 'El capital virtual disponible no alcanza para esa compra'
-              : 'No hay suficiente posición virtual para vender esa cantidad',
-          );
-          return;
-        }
+      const permitido =
+        tipo === 'compra' ? puedeComprar(estado, cantidad, precioUnitario) : puedeVender(estado, cantidad);
+      if (!permitido) {
+        setError(
+          tipo === 'compra'
+            ? 'El capital virtual disponible no alcanza para esa compra'
+            : 'No hay suficiente posición virtual para vender esa cantidad',
+        );
+        return;
       }
 
       const {
@@ -104,13 +114,34 @@ export function useCryptoMovimientos(modo: ModoCripto, moneda: string, capitalVi
     [modo, moneda, estado, cargar],
   );
 
+  const registrarReal = useCallback(
+    async (tipo: TipoMovimientoCripto, cantidad: number) => {
+      setError(null);
+      const { data, error: e } = await supabase.functions.invoke('binance-order', {
+        body: { entorno: entornoReal, moneda, lado: tipo, cantidad },
+      });
+      if (e) {
+        setError(e.message ?? 'No se pudo enviar la orden a Binance');
+        return;
+      }
+      if (data?.error) {
+        setError(data.error as string);
+        return;
+      }
+      await cargar();
+    },
+    [moneda, entornoReal, cargar],
+  );
+
   const comprar = useCallback(
-    (cantidad: number, precioUnitario: number) => registrar('compra', cantidad, precioUnitario),
-    [registrar],
+    (cantidad: number, precioUnitario?: number) =>
+      modo === 'simulacion' ? registrarSimulado('compra', cantidad, precioUnitario ?? 0) : registrarReal('compra', cantidad),
+    [modo, registrarSimulado, registrarReal],
   );
   const vender = useCallback(
-    (cantidad: number, precioUnitario: number) => registrar('venta', cantidad, precioUnitario),
-    [registrar],
+    (cantidad: number, precioUnitario?: number) =>
+      modo === 'simulacion' ? registrarSimulado('venta', cantidad, precioUnitario ?? 0) : registrarReal('venta', cantidad),
+    [modo, registrarSimulado, registrarReal],
   );
 
   return { movimientos, estado, cargando, error, comprar, vender, recargar: cargar };
