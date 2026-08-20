@@ -58,7 +58,7 @@ create table transacciones (
 create index transacciones_usuario_fecha_idx
   on transacciones (usuario_id, ocurrido_en desc);
 
-comment on constraint transacciones_usuario_message_id_key on transacciones is
+comment on constraint transacciones_usuario_id_message_id_key on transacciones is
   'Cada correo se registra una sola vez, aunque el polling lo vuelva a leer.';
 
 /* -------------------------------------------------------------------------- */

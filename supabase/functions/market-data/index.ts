@@ -75,21 +75,24 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
 });
 
+/**
+ * Lee el secreto vía RPC a `public.leer_secreto_vault` (migración 0006), no
+ * con `.schema('vault').from('decrypted_secrets')`: PostgREST no expone el
+ * schema `vault` por la API, ni siquiera con la service role key, así que esa
+ * consulta directa siempre falla en runtime aunque el secreto exista.
+ */
 async function leerClaveAlphaVantage(supabase: SupabaseClient): Promise<string> {
-  const { data, error } = await supabase
-    .schema('vault')
-    .from('decrypted_secrets')
-    .select('decrypted_secret')
-    .eq('name', 'alpha_vantage_api_key')
-    .single();
+  const { data, error } = await supabase.rpc('leer_secreto_vault', {
+    p_nombre: 'alpha_vantage_api_key',
+  });
 
-  if (error || !data?.decrypted_secret) {
+  if (error || !data) {
     throw new Error(
       'No se pudo leer el secreto "alpha_vantage_api_key" desde Vault. Sin una clave real de ' +
         'Alpha Vantage no hay datos que traer: esta función nunca genera un cierre de reemplazo.',
     );
   }
-  return data.decrypted_secret as string;
+  return data as string;
 }
 
 /**
