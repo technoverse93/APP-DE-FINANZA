@@ -71,13 +71,27 @@ jobs:
       # memoria que los módulos puramente Java que la app compilaba antes de
       # tener OTA. Con el heap/metaspace por defecto que trae la plantilla
       # (-Xmx2048m -XX:MaxMetaspaceSize=512m) la tarea kspReleaseKotlin revienta
-      # con "OutOfMemoryError: Metaspace" y el build se queda colgado hasta que
-      # lo mata el timeout del job, sin llegar a reportar el fallo real. La
-      # línea repetida en gradle.properties gana sobre la de la plantilla: Java
-      # Properties procesa el archivo en orden y la última que ve para una
-      # misma clave es la que queda.
+      # con "OutOfMemoryError: Metaspace". La línea repetida en gradle.properties
+      # gana sobre la de la plantilla: Java Properties procesa el archivo en
+      # orden y la última que ve para una misma clave es la que queda.
+      #
+      # Un primer intento subió el heap a 4096m/1024m y quedó peor: con
+      # org.gradle.parallel=true (default de la plantilla) Gradle compila varios
+      # módulos Kotlin/KSP a la vez, cada uno en su propio proceso; sumado al
+      # heap más grande del propio daemon, la memoria total del runner se
+      # agotó y el kernel mató un proceso `node` de la fase de configuración
+      # sin que imprimiera nada (por eso el log no mostraba ningún error real,
+      # solo "exit value 1"). Por eso acá se limita también org.gradle.workers.max:
+      # baja la memoria pico total en vez de subirla más.
       - name: Ampliar memoria de la JVM de Gradle para KSP
-        run: echo "org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m -Dfile.encoding=UTF-8" >> android/gradle.properties
+        run: |
+          {
+            echo "org.gradle.jvmargs=-Xmx3072m -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8"
+            echo "org.gradle.workers.max=2"
+          } >> android/gradle.properties
+
+      - name: Memoria disponible antes de compilar
+        run: free -h
 
       - name: Cachear dependencias de Gradle
         uses: actions/cache@v4
