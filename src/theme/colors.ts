@@ -37,6 +37,21 @@ export const colors = {
   blueSoft: '#E9F2FF',
 
   overlay: 'rgba(0, 0, 0, 0.4)',
+
+  /**
+   * Marca Technoverse, tomada tal cual de las variables CSS de
+   * Technoverse-p-gina- (el sitio web de referencia): navy como color de
+   * marca para encabezados y navegación, dorado/naranja como acento de
+   * acción. Conviven con la paleta de sistema de iOS de arriba en vez de
+   * reemplazarla: los estados (verde/rojo/naranja) siguen siendo los
+   * semánticos de iOS: la marca solo pinta encabezado, tab activo y CTA.
+   */
+  brandNavy: '#14243F',
+  brandNavyHover: '#1D3357',
+  brandGold: '#EA6A1E',
+  brandGoldDark: '#C2410C',
+  brandGoldLight: '#F59E5B',
+  brandGoldSoft: '#FFF1E8',
 } as const;
 
 export type ColorName = keyof typeof colors;
