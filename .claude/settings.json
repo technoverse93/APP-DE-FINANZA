@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__github__pull_request_read",
+      "Bash(git fetch *)",
+      "mcp__github__get_job_logs",
+      "mcp__github__actions_get",
+      "mcp__github__list_branches",
+      "mcp__github__search_repositories",
+      "Bash(npm view *)"
+    ]
+  }
+}

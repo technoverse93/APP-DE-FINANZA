@@ -190,23 +190,24 @@ async function cerrarCorrida(
 /**
  * Resuelve la credencial desde Vault. Gmail usa contraseña de aplicación;
  * Outlook exige XOAUTH2 desde que Microsoft retiró la autenticación básica.
+ *
+ * Se lee vía RPC a `public.leer_secreto_vault` (migración 0006), no con
+ * `.schema('vault').from('decrypted_secrets')`: PostgREST no expone el schema
+ * `vault` por la API, ni siquiera con la service role key.
  */
 async function construirAuth(
   supabase: SupabaseClient,
   cuenta: CuentaCorreo,
 ): Promise<AuthMethod> {
-  const { data, error } = await supabase
-    .schema('vault')
-    .from('decrypted_secrets')
-    .select('decrypted_secret')
-    .eq('name', cuenta.secreto_ref)
-    .single();
+  const { data, error } = await supabase.rpc('leer_secreto_vault', {
+    p_nombre: cuenta.secreto_ref,
+  });
 
-  if (error || !data?.decrypted_secret) {
+  if (error || !data) {
     throw new Error(`No se pudo leer el secreto "${cuenta.secreto_ref}" desde Vault`);
   }
 
-  const secreto = data.decrypted_secret as string;
+  const secreto = data as string;
   return cuenta.metodo_auth === 'plain'
     ? { tipo: 'plain', usuario: cuenta.direccion, password: secreto }
     : { tipo: 'xoauth2', usuario: cuenta.direccion, accessToken: secreto };

@@ -16,6 +16,18 @@ confirmación cada vez**:
 Un check de CI huérfano, proveniente de una integración no relacionada con el
 diff, **no** cuenta como bloqueo real.
 
+Esto es autorización permanente de verdad: no hace falta pedir luz verde en
+cada tarea para commitear, pushear, abrir el PR o fusionarlo. Cubre
+específicamente `merge_pull_request` con `squash` — el método normal de
+cierre — no `merge` ni `rebase` salvo que se pida explícitamente.
+
+Lo que esta autorización **no** cubre, porque son acciones de blast radius
+distinto (afectan al repo o a personas más allá de este PR, y no se deshacen
+con un simple revert): force-push más allá del caso documentado de
+recuperación tras un squash-merge, borrar ramas o el repositorio, cambiar
+colaboradores/accesos/visibilidad del repo, o tocar secretos/webhooks desde
+la configuración de GitHub. Esas siguen pidiendo confirmación puntual.
+
 ## Lo que SIGUE necesitando confirmación explícita
 
 Estas acciones nunca se ejecutan sin que el dueño lo confirme en el momento:
