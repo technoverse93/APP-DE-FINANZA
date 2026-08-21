@@ -5,3 +5,5 @@ export { SectionHeader } from './SectionHeader';
 export { BlurHeader } from './BlurHeader';
 export { ErrorBoundary } from './ErrorBoundary';
 export { PriceChart } from './PriceChart';
+export { ConfigWarning } from './ConfigWarning';
+export { CandlestickChart, type Vela } from './CandlestickChart';

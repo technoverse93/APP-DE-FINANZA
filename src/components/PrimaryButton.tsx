@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text } from 'react-native';
 import { colors, radius, spacing, typography } from '../theme';
 
@@ -8,7 +9,15 @@ interface Props {
   readonly cargando?: boolean;
 }
 
-export function PrimaryButton({ titulo, onPress, deshabilitado, cargando }: Props) {
+/** Memoizado: solo evita re-render real si quien lo usa pasa un `onPress`
+ * estable (`useCallback`) — de lo contrario una prop función nueva en cada
+ * render invalida la comparación igual. */
+export const PrimaryButton = memo(function PrimaryButton({
+  titulo,
+  onPress,
+  deshabilitado,
+  cargando,
+}: Props) {
   const inactivo = deshabilitado || cargando;
   return (
     <Pressable
@@ -29,7 +38,7 @@ export function PrimaryButton({ titulo, onPress, deshabilitado, cargando }: Prop
       )}
     </Pressable>
   );
-}
+});
 
 const styles = StyleSheet.create({
   boton: {

@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { BlurView } from 'expo-blur';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import { colors, radius, spacing, typography } from '../theme';
@@ -17,8 +18,13 @@ const LOGO_TECHNOVERSE = require('../../assets/brand/technoverse-logo.png');
  * app ("Finanzas"), la misma en todas las pantallas; el `titulo` que recibe
  * cada pantalla es el título grande de esa sección en particular (p. ej.
  * "Quincena", "Inversión"), no el nombre de la app.
+ *
+ * Memoizado: aparece en todas las pantallas y toma solo props primitivas
+ * (texto), así que evita re-renderizar el `BlurView` — el elemento más caro
+ * de la pantalla junto a los gráficos — cuando el resto del árbol cambia
+ * por, por ejemplo, cada tecla de un formulario.
  */
-export function BlurHeader({ titulo, subtitulo }: Props) {
+export const BlurHeader = memo(function BlurHeader({ titulo, subtitulo }: Props) {
   return (
     <BlurView intensity={60} tint="light" style={styles.contenedor}>
       <View style={styles.masthead}>
@@ -31,7 +37,7 @@ export function BlurHeader({ titulo, subtitulo }: Props) {
       </View>
     </BlurView>
   );
-}
+});
 
 const styles = StyleSheet.create({
   contenedor: {

@@ -1,0 +1,55 @@
+name: Publicar actualización OTA
+
+# Publica cada cambio de JS a los usuarios que ya tienen el APK instalado,
+# vía EAS Update — sin que nadie tenga que descargar un APK nuevo a mano.
+#
+# Corre en los runners de GitHub (con salida a internet completa) porque el
+# entorno donde corre esta sesión de Claude tiene bloqueado por política de
+# red el acceso a api.expo.dev: la única forma de publicar sin depender de
+# esa red es que lo haga GitHub Actions, no Claude directamente.
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: eas-update-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  publicar-actualizacion:
+    name: Publicar en EAS Update
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      # Mismas variables que usa el build nativo (build-apk.yml): el bundle
+      # de JS que se publica acá tiene que quedar con la misma configuración
+      # de Supabase que el APK instalado, o la actualización OTA "pisaría"
+      # esos valores con un bundle sin configurar.
+      EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+    steps:
+      - name: Descargar el repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      # Idempotente a propósito: falla con un error normal si el canal ya
+      # existe (después de la primera corrida exitosa), así que no se
+      # detiene el resto del job por eso.
+      - name: Crear el canal "production" si todavía no existe
+        run: npx eas-cli@latest channel:create production --non-interactive || true
+
+      - name: Publicar la actualización
+        run: npx eas-cli@latest update --channel production --message "OTA desde ${{ github.sha }}" --non-interactive

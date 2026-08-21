@@ -28,16 +28,25 @@ interface EstadoQuincena {
  * Estado de la quincena en curso: próximo pago, si la ventana de la colilla
  * está abierta y la distribución resultante del monto ingresado.
  */
-export function useQuincena(ahora: Date = new Date()) {
+export function useQuincena(ahora?: Date) {
   const [gastosFijos, setGastosFijos] = useState<GastosFijos>(GASTOS_VACIOS);
   const [colilla, setColilla] = useState<number | null>(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const payday = useMemo(() => nextPayday(ahora), [ahora]);
+  // `ahora ?? new Date()` como valor por defecto de un parámetro se evalúa
+  // en cada llamada: sin fijarlo acá, cada render de quien llama a
+  // useQuincena() sin argumento produce un Date con identidad nueva, lo que
+  // invalida los useMemo de abajo en cada render (Date no tiene igualdad por
+  // valor) aunque el minuto real no haya cambiado. Memoizado con
+  // dependencia `[ahora]`, que es `undefined` de forma estable entre
+  // renders, el momento queda fijo mientras el componente esté montado.
+  const momento = useMemo(() => ahora ?? new Date(), [ahora]);
+
+  const payday = useMemo(() => nextPayday(momento), [momento]);
   const ventanaAbierta = useMemo(
-    () => isColillaInputEnabled(ahora, payday),
-    [ahora, payday],
+    () => isColillaInputEnabled(momento, payday),
+    [momento, payday],
   );
   const abreEl = useMemo(() => colillaWindow(payday).opensAt, [payday]);
 

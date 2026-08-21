@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
   RefreshControl,
   ScrollView,
@@ -42,12 +42,12 @@ export function ResumenScreen() {
   const [texto, setTexto] = useState('');
   const [sincronizando, setSincronizando] = useState(false);
 
-  const aplicarColilla = () => {
+  const aplicarColilla = useCallback(() => {
     const monto = Number(texto.replace(/[^\d]/g, ''));
     setColilla(Number.isFinite(monto) && monto > 0 ? monto : null);
-  };
+  }, [texto, setColilla]);
 
-  const sincronizar = async () => {
+  const sincronizar = useCallback(async () => {
     setSincronizando(true);
     try {
       await pedirSincronizacion();
@@ -55,7 +55,11 @@ export function ResumenScreen() {
     } finally {
       setSincronizando(false);
     }
-  };
+  }, [recargar]);
+
+  const onRefresh = useCallback(() => {
+    void sincronizar();
+  }, [sincronizar]);
 
   return (
     <SafeAreaView style={styles.pantalla}>
@@ -64,7 +68,7 @@ export function ResumenScreen() {
       <ScrollView
         contentContainerStyle={styles.contenido}
         refreshControl={
-          <RefreshControl refreshing={sincronizando} onRefresh={() => void sincronizar()} />
+          <RefreshControl refreshing={sincronizando} onRefresh={onRefresh} />
         }
       >
         <Card>

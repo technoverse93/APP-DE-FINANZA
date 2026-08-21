@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Finanzas",
-    "slug": "app-de-finanza",
+    "slug": "technoverse",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -40,11 +40,14 @@
       "enabled": true,
       "checkAutomatically": "ON_LOAD",
       "fallbackToCacheTimeout": 0,
-      "url": "https://u.expo.dev/REEMPLAZA_CON_TU_EAS_PROJECT_ID"
+      "url": "https://u.expo.dev/ece1cd9f-7350-4c33-8014-5b2b2a9c4768",
+      "requestHeaders": {
+        "expo-channel-name": "production"
+      }
     },
     "extra": {
       "eas": {
-        "projectId": "REEMPLAZA_CON_TU_EAS_PROJECT_ID"
+        "projectId": "ece1cd9f-7350-4c33-8014-5b2b2a9c4768"
       }
     }
   }

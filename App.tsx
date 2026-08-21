@@ -1,8 +1,9 @@
 import { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { BiometricGate } from './src/auth/BiometricGate';
-import { ErrorBoundary } from './src/components';
+import { ConfigWarning, ErrorBoundary } from './src/components';
 import { registrarTareaDeFondo } from './src/lib/backgroundSync';
+import { supabaseConfigError } from './src/lib/supabase';
 import { comprobarActualizacion } from './src/lib/updates';
 import { RootTabs } from './src/navigation/RootTabs';
 
@@ -35,6 +36,7 @@ export default function App() {
     <ErrorBoundary>
       <BiometricGate>
         <StatusBar style="dark" />
+        {supabaseConfigError ? <ConfigWarning mensaje={supabaseConfigError} /> : null}
         <RootTabs />
       </BiometricGate>
     </ErrorBoundary>

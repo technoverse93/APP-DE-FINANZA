@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   RefreshControl,
@@ -49,7 +49,7 @@ export function InversionScreen() {
     });
   }, [metricas, config.principalInicial, config.aportePeriodico]);
 
-  const aplicarConfig = () => {
+  const aplicarConfig = useCallback(() => {
     const aporte = Number(textoAporte.replace(/[^\d]/g, ''));
     const principal = Number(textoPrincipal.replace(/[^\d]/g, ''));
     void guardar({
@@ -57,14 +57,18 @@ export function InversionScreen() {
       aportePeriodico: Number.isFinite(aporte) ? aporte : config.aportePeriodico,
       principalInicial: Number.isFinite(principal) ? principal : config.principalInicial,
     });
-  };
+  }, [textoAporte, textoPrincipal, config, guardar]);
+
+  const onRefresh = useCallback(() => {
+    void recargar();
+  }, [recargar]);
 
   return (
     <SafeAreaView style={styles.pantalla}>
       <BlurHeader titulo="Inversión" subtitulo={`${config.ticker} · S&P 500`} />
       <ScrollView
         contentContainerStyle={styles.contenido}
-        refreshControl={<RefreshControl refreshing={cargando} onRefresh={() => void recargar()} />}
+        refreshControl={<RefreshControl refreshing={cargando} onRefresh={onRefresh} />}
       >
         <Card>
           {cargando && precios.length === 0 ? (
