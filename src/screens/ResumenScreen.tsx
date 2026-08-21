@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native';
 import { BlurHeader, Card, ListRow, PrimaryButton, SectionHeader } from '../components';
-import { formatearColones } from '../core/payroll/distribution';
+import { formatearColones, type GastosFijos } from '../core/payroll/distribution';
 import { useQuincena } from '../state/useQuincena';
 import { pedirSincronizacion } from '../lib/backgroundSync';
 import { colors, radius, spacing, typography } from '../theme';
@@ -36,11 +36,49 @@ const ETIQUETAS_ESTADO = {
   holgado: { texto: 'Con excedente para capital', tono: 'positivo' },
 } as const;
 
+function limpiarMonto(texto: string): number {
+  const n = Number(texto.replace(/[^\d]/g, ''));
+  return Number.isFinite(n) ? n : 0;
+}
+
 export function ResumenScreen() {
-  const { payday, ventanaAbierta, abreEl, gastosFijos, distribucion, setColilla, recargar } =
-    useQuincena();
+  const {
+    payday,
+    ventanaAbierta,
+    abreEl,
+    gastosFijos,
+    distribucion,
+    setColilla,
+    guardarGastosFijos,
+    recargar,
+  } = useQuincena();
   const [texto, setTexto] = useState('');
   const [sincronizando, setSincronizando] = useState(false);
+
+  const [editandoGastos, setEditandoGastos] = useState(false);
+  const [textoCasa, setTextoCasa] = useState('');
+  const [textoComida, setTextoComida] = useState('');
+  const [textoPases, setTextoPases] = useState('');
+  const [textoDeudaBase, setTextoDeudaBase] = useState('');
+
+  const empezarEdicionGastos = useCallback(() => {
+    setTextoCasa(String(gastosFijos.casa));
+    setTextoComida(String(gastosFijos.comida));
+    setTextoPases(String(gastosFijos.pases));
+    setTextoDeudaBase(String(gastosFijos.deudaBase));
+    setEditandoGastos(true);
+  }, [gastosFijos]);
+
+  const guardarGastos = useCallback(() => {
+    const siguiente: GastosFijos = {
+      casa: limpiarMonto(textoCasa),
+      comida: limpiarMonto(textoComida),
+      pases: limpiarMonto(textoPases),
+      deudaBase: limpiarMonto(textoDeudaBase),
+    };
+    void guardarGastosFijos(siguiente);
+    setEditandoGastos(false);
+  }, [textoCasa, textoComida, textoPases, textoDeudaBase, guardarGastosFijos]);
 
   const aplicarColilla = useCallback(() => {
     const monto = Number(texto.replace(/[^\d]/g, ''));
@@ -118,16 +156,73 @@ export function ResumenScreen() {
         </View>
 
         <View style={styles.seccion}>
-          <SectionHeader titulo="Gastos fijos" />
-          <Card sinRelleno>
-            <ListRow titulo="Casa" valor={formatearColones(gastosFijos.casa)} />
-            <ListRow titulo="Comida" valor={formatearColones(gastosFijos.comida)} />
-            <ListRow titulo="Pases" valor={formatearColones(gastosFijos.pases)} />
-            <ListRow
-              titulo="Deuda base"
-              valor={formatearColones(gastosFijos.deudaBase)}
-              ultima
-            />
+          <SectionHeader
+            titulo="Gastos fijos"
+            accion={editandoGastos ? undefined : 'Editar'}
+            onAccionPress={empezarEdicionGastos}
+          />
+          <Card sinRelleno={!editandoGastos}>
+            {editandoGastos ? (
+              <View style={styles.formulario}>
+                <Text style={styles.etiquetaCampo}>Casa</Text>
+                <TextInput
+                  style={styles.inputGasto}
+                  value={textoCasa}
+                  onChangeText={setTextoCasa}
+                  keyboardType="number-pad"
+                  placeholderTextColor={colors.labelTertiary}
+                />
+                <Text style={styles.etiquetaCampo}>Comida</Text>
+                <TextInput
+                  style={styles.inputGasto}
+                  value={textoComida}
+                  onChangeText={setTextoComida}
+                  keyboardType="number-pad"
+                  placeholderTextColor={colors.labelTertiary}
+                />
+                <Text style={styles.etiquetaCampo}>Pases</Text>
+                <TextInput
+                  style={styles.inputGasto}
+                  value={textoPases}
+                  onChangeText={setTextoPases}
+                  keyboardType="number-pad"
+                  placeholderTextColor={colors.labelTertiary}
+                />
+                <Text style={styles.etiquetaCampo}>Deuda base</Text>
+                <TextInput
+                  style={styles.inputGasto}
+                  value={textoDeudaBase}
+                  onChangeText={setTextoDeudaBase}
+                  keyboardType="number-pad"
+                  placeholderTextColor={colors.labelTertiary}
+                />
+                <PrimaryButton titulo="Guardar gastos fijos" onPress={guardarGastos} />
+              </View>
+            ) : (
+              <>
+                <ListRow
+                  titulo="Casa"
+                  valor={formatearColones(gastosFijos.casa)}
+                  onPress={empezarEdicionGastos}
+                />
+                <ListRow
+                  titulo="Comida"
+                  valor={formatearColones(gastosFijos.comida)}
+                  onPress={empezarEdicionGastos}
+                />
+                <ListRow
+                  titulo="Pases"
+                  valor={formatearColones(gastosFijos.pases)}
+                  onPress={empezarEdicionGastos}
+                />
+                <ListRow
+                  titulo="Deuda base"
+                  valor={formatearColones(gastosFijos.deudaBase)}
+                  onPress={empezarEdicionGastos}
+                  ultima
+                />
+              </>
+            )}
           </Card>
         </View>
 
@@ -196,4 +291,13 @@ const styles = StyleSheet.create({
     color: colors.label,
   },
   bloqueado: { ...typography.subheadline, color: colors.labelSecondary },
+  etiquetaCampo: { ...typography.footnote, color: colors.labelSecondary },
+  inputGasto: {
+    ...typography.body,
+    backgroundColor: colors.fill,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    color: colors.label,
+  },
 });
