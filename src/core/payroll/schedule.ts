@@ -154,3 +154,25 @@ export function msUntilColillaWindow(now: Date, payday: Payday = nextPayday(now)
   const { opensAt } = colillaWindow(payday);
   return Math.max(0, opensAt.getTime() - now.getTime());
 }
+
+/**
+ * Fecha real del pago que queda `n` quincenas adelante de `desde` (n=1 es el
+ * próximo pago). Sirve para convertir un conteo de períodos de la Trituradora
+ * de Deudas (que cuenta quincenas, no meses) en una fecha calendario real,
+ * reusando el mismo calendario 13/28 en vez de aproximar con "meses".
+ *
+ * n=0 devuelve `desde` tal cual: ya está saldada, no hay que avanzar nada.
+ */
+export function avanzarNPeriodos(desde: Date, n: number): Date {
+  if (!Number.isInteger(n) || n < 0) {
+    throw new RangeError('n debe ser un entero no negativo');
+  }
+  if (n === 0) return desde;
+
+  let payday = nextPayday(desde);
+  for (let i = 1; i < n; i++) {
+    const diaSiguiente = new Date(payday.date.getTime() + 24 * MS_PER_HOUR);
+    payday = nextPayday(diaSiguiente);
+  }
+  return payday.date;
+}

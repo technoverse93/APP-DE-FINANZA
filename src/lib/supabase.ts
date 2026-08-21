@@ -1,5 +1,5 @@
 import 'react-native-url-polyfill/auto';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 /**
@@ -96,6 +96,21 @@ export const supabaseConfigError: string | null =
     ? 'Faltan EXPO_PUBLIC_SUPABASE_URL y EXPO_PUBLIC_SUPABASE_ANON_KEY. Copiá .env.example a .env.'
     : null;
 
+/**
+ * Adaptador de almacenamiento de sesión sobre expo-secure-store en vez de
+ * AsyncStorage. AsyncStorage guarda en texto plano (SharedPreferences en
+ * Android, un plist en iOS); el JWT y el refresh token son credenciales de
+ * acceso reales, así que quedan mejor en el Keystore/Keychore cifrado del
+ * sistema operativo, que es lo que expo-secure-store usa por debajo. La
+ * interfaz (getItem/setItem/removeItem async) es exactamente la que
+ * `auth.storage` de supabase-js espera, así que no hace falta más adaptador.
+ */
+const almacenSeguro = {
+  getItem: (clave: string) => SecureStore.getItemAsync(clave),
+  setItem: (clave: string, valor: string) => SecureStore.setItemAsync(clave, valor),
+  removeItem: (clave: string) => SecureStore.deleteItemAsync(clave),
+};
+
 class SupabaseNoConfiguradoError extends Error {
   constructor() {
     super(supabaseConfigError ?? 'Supabase no está configurado');
@@ -143,7 +158,7 @@ export const supabase: SupabaseClient = supabaseConfigError
   ? crearClienteStub()
   : createClient(SUPABASE_URL!, SUPABASE_ANON_KEY!, {
       auth: {
-        storage: AsyncStorage,
+        storage: almacenSeguro,
         persistSession: true,
         autoRefreshToken: true,
         // No hay flujo de OAuth por navegador en esta app.

@@ -1,6 +1,9 @@
 import {
   compararEscenarios,
   proyectarTrituradora,
+  priorizarAbonoExtra,
+  proyectarConGamificacion,
+  RemanenteInsuficienteError,
   PERIODOS_POR_ANIO_POR_DEFECTO,
 } from '../src/core/debt/crusher';
 
@@ -123,5 +126,83 @@ describe('compararEscenarios', () => {
     });
     expect(c.interesAhorrado).toBe(0);
     expect(c.periodosAhorrados).toBe(0);
+  });
+});
+
+describe('priorizarAbonoExtra', () => {
+  it('vuelca todo el extra a la deuda de mayor tasa cuando no alcanza para saldarla', () => {
+    const asignaciones = priorizarAbonoExtra(150_000, [
+      { id: 'a', saldoActual: 100_000, tasaAnual: 0.1, abonoObjetivo: 10_000 },
+      { id: 'b', saldoActual: 500_000, tasaAnual: 0.3, abonoObjetivo: 20_000 },
+    ]);
+    const asigB = asignaciones.find((a) => a.deudaId === 'b')!;
+    const asigA = asignaciones.find((a) => a.deudaId === 'a')!;
+    expect(asigB.abonoExtraAsignado).toBe(150_000);
+    expect(asigB.abonoTotal).toBe(170_000);
+    expect(asigA.abonoExtraAsignado).toBe(0);
+    expect(asigA.abonoTotal).toBe(10_000);
+  });
+
+  it('si la deuda de mayor tasa se salda con el extra, el resto pasa a la siguiente', () => {
+    const asignaciones = priorizarAbonoExtra(150_000, [
+      { id: 'a', saldoActual: 100_000, tasaAnual: 0.1, abonoObjetivo: 10_000 },
+      { id: 'b', saldoActual: 50_000, tasaAnual: 0.3, abonoObjetivo: 20_000 },
+    ]);
+    const asigB = asignaciones.find((a) => a.deudaId === 'b')!;
+    const asigA = asignaciones.find((a) => a.deudaId === 'a')!;
+    expect(asigB.abonoExtraAsignado).toBe(50_000);
+    expect(asigA.abonoExtraAsignado).toBe(100_000);
+    expect(asigA.abonoTotal).toBe(110_000);
+  });
+
+  it('rechaza un extra no positivo', () => {
+    expect(() =>
+      priorizarAbonoExtra(0, [{ id: 'a', saldoActual: 1000, tasaAnual: 0.1, abonoObjetivo: 100 }]),
+    ).toThrow(RemanenteInsuficienteError);
+    expect(() => priorizarAbonoExtra(-500, [])).toThrow(RemanenteInsuficienteError);
+  });
+
+  it('con una lista vacía de deudas, no hay nada que asignar', () => {
+    expect(priorizarAbonoExtra(10_000, [])).toEqual([]);
+  });
+});
+
+describe('proyectarConGamificacion', () => {
+  const fechaInicio = new Date(Date.UTC(2026, 7, 1, 12)); // 1 de agosto de 2026
+
+  it('con abono extra que ahorra períodos, arma un mensaje positivo y fechas coherentes', () => {
+    const p = proyectarConGamificacion(
+      { saldoInicial: 1_000_000, tasaAnualNominal: 0.24, abonoBase: 50_000, abonoExtra: 20_000 },
+      fechaInicio,
+    );
+    expect(p.comparacion.periodosAhorrados).toBeGreaterThan(0);
+    expect(p.fechaSaldoBase).not.toBeNull();
+    expect(p.fechaSaldoConExtra).not.toBeNull();
+    expect(p.fechaSaldoConExtra!.getTime()).toBeLessThan(p.fechaSaldoBase!.getTime());
+    expect(p.mensaje).toContain('Aceleraste tu libertad financiera');
+  });
+
+  it('sin abono extra, el mensaje indica que no hay aceleración y las fechas coinciden', () => {
+    const p = proyectarConGamificacion(
+      { saldoInicial: 500_000, tasaAnualNominal: 0.18, abonoBase: 40_000, abonoExtra: 0 },
+      fechaInicio,
+    );
+    expect(p.mensaje).toContain('no adelanta');
+    expect(p.fechaSaldoBase).toEqual(p.fechaSaldoConExtra);
+  });
+
+  it('si no se llega a saldar dentro del tope de períodos, la fecha queda en null', () => {
+    const p = proyectarConGamificacion(
+      {
+        saldoInicial: 1_000_000,
+        tasaAnualNominal: 0.24,
+        abonoBase: 5_000, // no cubre ni el interés del primer período
+        abonoExtra: 0,
+        maxPeriodos: 5,
+      },
+      fechaInicio,
+    );
+    expect(p.fechaSaldoBase).toBeNull();
+    expect(p.fechaSaldoConExtra).toBeNull();
   });
 });
