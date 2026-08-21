@@ -8,6 +8,9 @@
  * "qué pasa si abono más" contra el escenario base.
  */
 
+import { avanzarNPeriodos } from '../payroll/schedule';
+import { formatearColones } from '../payroll/distribution';
+
 /** Períodos de pago al año con el calendario de 13 y 28 (2 por mes). */
 export const PERIODOS_POR_ANIO_POR_DEFECTO = 24;
 
@@ -171,5 +174,109 @@ export function compararEscenarios(parametros: ParametrosComparacion): Comparaci
     conExtra,
     interesAhorrado: base.totalInteresPagado - conExtra.totalInteresPagado,
     periodosAhorrados: base.periodosParaSaldar - conExtra.periodosParaSaldar,
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Priorización entre varias deudas (método avalancha)                        */
+/* -------------------------------------------------------------------------- */
+
+export class RemanenteInsuficienteError extends Error {
+  constructor() {
+    super('No hay abono extra disponible para repartir entre las deudas');
+    this.name = 'RemanenteInsuficienteError';
+  }
+}
+
+export interface DeudaParaPriorizar {
+  readonly id: string;
+  readonly saldoActual: number;
+  readonly tasaAnual: number;
+  readonly abonoObjetivo: number;
+}
+
+export interface AsignacionAbono {
+  readonly deudaId: string;
+  /** Abono objetivo más lo que le tocó del extra, ya redondeado a colones. */
+  readonly abonoTotal: number;
+  readonly abonoExtraAsignado: number;
+}
+
+/**
+ * Reparte un abono extra entre varias deudas por el método de "avalancha":
+ * todo el extra va primero a la deuda de mayor tasa de interés (es
+ * matemáticamente el uso de mayor impacto de cualquier colón adicional),
+ * hasta saldarla; lo que sobra se vuelca a la siguiente de mayor tasa, y así
+ * sucesivamente. Cada deuda sigue recibiendo su `abonoObjetivo` de base,
+ * este reparto es solo sobre el excedente.
+ *
+ * @throws {RemanenteInsuficienteError} si no hay abono extra que repartir.
+ */
+export function priorizarAbonoExtra(
+  abonoExtraDisponible: number,
+  deudas: readonly DeudaParaPriorizar[],
+): readonly AsignacionAbono[] {
+  if (!Number.isFinite(abonoExtraDisponible) || abonoExtraDisponible <= 0) {
+    throw new RemanenteInsuficienteError();
+  }
+
+  const ordenadas = [...deudas].sort((a, b) => b.tasaAnual - a.tasaAnual);
+  let restante = abonoExtraDisponible;
+
+  return ordenadas.map((deuda) => {
+    const extra = Math.max(0, Math.min(restante, deuda.saldoActual));
+    restante -= extra;
+    return {
+      deudaId: deuda.id,
+      abonoTotal: aColones(deuda.abonoObjetivo + extra),
+      abonoExtraAsignado: aColones(extra),
+    };
+  });
+}
+
+/* -------------------------------------------------------------------------- */
+/* Proyección con fecha real y mensaje de progreso                            */
+/* -------------------------------------------------------------------------- */
+
+export interface ProyeccionGamificada {
+  readonly comparacion: ComparacionEscenarios;
+  /** Fecha real del pago en que queda saldada, o null si no se saldó dentro
+   * del tope de períodos (proyectar una fecha ahí sería una falsa precisión). */
+  readonly fechaSaldoBase: Date | null;
+  readonly fechaSaldoConExtra: Date | null;
+  readonly mensaje: string;
+}
+
+function construirMensajeGamificado(periodosAhorrados: number, interesAhorrado: number): string {
+  if (periodosAhorrados <= 0) {
+    return 'Este abono extra no adelanta la fecha en que quedás libre de esta deuda.';
+  }
+  const meses = periodosAhorrados / 2;
+  const textoMeses = Number.isInteger(meses) ? String(meses) : meses.toFixed(1);
+  return (
+    `Aceleraste tu libertad financiera en ${periodosAhorrados} quincenas (~${textoMeses} meses) ` +
+    `y te ahorrás ${formatearColones(interesAhorrado)} en intereses.`
+  );
+}
+
+/**
+ * Envuelve `compararEscenarios` con la fecha calendario real de cada
+ * escenario (reusando el calendario 13/28 de `core/payroll/schedule`, no una
+ * aproximación en meses) y un mensaje dinámico para la pantalla.
+ */
+export function proyectarConGamificacion(
+  parametros: ParametrosComparacion,
+  fechaInicio: Date,
+): ProyeccionGamificada {
+  const comparacion = compararEscenarios(parametros);
+  return {
+    comparacion,
+    fechaSaldoBase: comparacion.base.saldado
+      ? avanzarNPeriodos(fechaInicio, comparacion.base.periodosParaSaldar)
+      : null,
+    fechaSaldoConExtra: comparacion.conExtra.saldado
+      ? avanzarNPeriodos(fechaInicio, comparacion.conExtra.periodosParaSaldar)
+      : null,
+    mensaje: construirMensajeGamificado(comparacion.periodosAhorrados, comparacion.interesAhorrado),
   };
 }

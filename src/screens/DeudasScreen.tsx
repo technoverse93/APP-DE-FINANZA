@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import { BlurHeader, Card, ListRow, PrimaryButton, SectionHeader } from '../components';
-import { compararEscenarios } from '../core/debt/crusher';
+import { priorizarAbonoExtra, proyectarConGamificacion } from '../core/debt/crusher';
 import { formatearColones } from '../core/payroll/distribution';
 import { type Deuda, useDeudas } from '../state/useDeudas';
 import { type MovimientoLibro, useLibroMayor } from '../state/useLibroMayor';
@@ -18,6 +18,22 @@ import { colors, radius, spacing, typography } from '../theme';
 function limpiarMonto(texto: string): number {
   const n = Number(texto.replace(/[^\d]/g, ''));
   return Number.isFinite(n) ? n : 0;
+}
+
+const FORMATO_FECHA_CORTA = new Intl.DateTimeFormat('es-CR', {
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+  timeZone: 'America/Costa_Rica',
+});
+
+function fechaLegible(fecha: Date | null): string {
+  if (!fecha) return 'No se alcanza a saldar en el horizonte proyectado';
+  try {
+    return FORMATO_FECHA_CORTA.format(fecha);
+  } catch {
+    return fecha.toISOString().slice(0, 10);
+  }
 }
 
 /** Fila del Libro Mayor. Memoizada: la lista puede crecer a 200 entradas y no
@@ -66,15 +82,26 @@ export function DeudasScreen() {
 
   const abonoExtra = limpiarMonto(textoAbonoExtra);
 
-  const comparacion = useMemo(() => {
+  const proyeccion = useMemo(() => {
     if (!deudaSeleccionada || deudaSeleccionada.abonoObjetivo <= 0) return null;
-    return compararEscenarios({
-      saldoInicial: deudaSeleccionada.saldoActual,
-      tasaAnualNominal: deudaSeleccionada.tasaAnual,
-      abonoBase: deudaSeleccionada.abonoObjetivo,
-      abonoExtra,
-    });
+    return proyectarConGamificacion(
+      {
+        saldoInicial: deudaSeleccionada.saldoActual,
+        tasaAnualNominal: deudaSeleccionada.tasaAnual,
+        abonoBase: deudaSeleccionada.abonoObjetivo,
+        abonoExtra,
+      },
+      new Date(),
+    );
   }, [deudaSeleccionada, abonoExtra]);
+
+  /** Cómo repartir el abono extra entre TODAS las deudas (método avalancha):
+   * solo tiene sentido mostrarlo con dos o más deudas — con una sola, el
+   * extra ya va completo a esa deuda y esta tarjeta no agregaría nada. */
+  const asignacionAvalancha = useMemo(() => {
+    if (abonoExtra <= 0 || deudasHook.deudas.length < 2) return null;
+    return priorizarAbonoExtra(abonoExtra, deudasHook.deudas);
+  }, [abonoExtra, deudasHook.deudas]);
 
   const refrescando = libro.cargando || deudasHook.cargando;
   const recargarTodo = useCallback(() => {
@@ -197,30 +224,51 @@ export function DeudasScreen() {
           </Card>
         </View>
 
-        {comparacion ? (
+        {proyeccion ? (
           <View style={styles.seccion}>
             <SectionHeader titulo="Ahorro proyectado" />
             <Card sinRelleno>
               <ListRow
-                titulo="Quincenas para saldar (base)"
-                valor={String(comparacion.base.periodosParaSaldar)}
+                titulo="Fecha en que quedás libre (plan base)"
+                valor={fechaLegible(proyeccion.fechaSaldoBase)}
               />
               <ListRow
-                titulo="Quincenas para saldar (con extra)"
-                valor={String(comparacion.conExtra.periodosParaSaldar)}
-                tono="positivo"
-              />
-              <ListRow
-                titulo="Quincenas que te ahorrás"
-                valor={String(comparacion.periodosAhorrados)}
+                titulo="Fecha en que quedás libre (con extra)"
+                valor={fechaLegible(proyeccion.fechaSaldoConExtra)}
                 tono="positivo"
               />
               <ListRow
                 titulo="Interés que te ahorrás"
-                valor={formatearColones(comparacion.interesAhorrado)}
+                valor={formatearColones(proyeccion.comparacion.interesAhorrado)}
                 tono="positivo"
                 ultima
               />
+            </Card>
+            <Text style={styles.mensajeGamificado}>{proyeccion.mensaje}</Text>
+          </View>
+        ) : null}
+
+        {asignacionAvalancha ? (
+          <View style={styles.seccion}>
+            <SectionHeader titulo="Reparto sugerido del abono extra" />
+            <Card sinRelleno>
+              <Text style={styles.avisoAvalancha}>
+                Repartido por tasa de interés: primero se llena la deuda más cara hasta saldarla, y
+                el resto pasa a la siguiente.
+              </Text>
+              {asignacionAvalancha.map((asig, i) => {
+                const deuda = deudasHook.deudas.find((d) => d.id === asig.deudaId);
+                return (
+                  <ListRow
+                    key={asig.deudaId}
+                    titulo={deuda?.nombre ?? asig.deudaId}
+                    detalle={`Objetivo ${formatearColones(deuda?.abonoObjetivo ?? 0)} + extra ${formatearColones(asig.abonoExtraAsignado)}`}
+                    valor={formatearColones(asig.abonoTotal)}
+                    tono={asig.abonoExtraAsignado > 0 ? 'positivo' : 'normal'}
+                    ultima={i === asignacionAvalancha.length - 1}
+                  />
+                );
+              })}
             </Card>
           </View>
         ) : null}
@@ -249,6 +297,20 @@ const styles = StyleSheet.create({
     backgroundColor: colors.brandGold,
   },
   etiquetaCampo: { ...typography.footnote, color: colors.labelSecondary },
+  mensajeGamificado: {
+    ...typography.subheadline,
+    color: colors.label,
+    backgroundColor: colors.brandGoldSoft,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginTop: spacing.sm,
+  },
+  avisoAvalancha: {
+    ...typography.footnote,
+    color: colors.labelSecondary,
+    padding: spacing.lg,
+    paddingBottom: 0,
+  },
   input: {
     ...typography.body,
     backgroundColor: colors.fill,

@@ -1,5 +1,6 @@
 import {
   adjustForWeekend,
+  avanzarNPeriodos,
   colillaWindow,
   crMidnightUtc,
   isColillaInputEnabled,
@@ -133,5 +134,35 @@ describe('ventana de la colilla', () => {
     const [quincena] = paydaysForMonth(2026, 7);
     const now = new Date(quincena.date.getTime() + 24 * 3_600_000);
     expect(isColillaInputEnabled(now, quincena)).toBe(false);
+  });
+});
+
+describe('avanzarNPeriodos', () => {
+  const desde = new Date(Date.UTC(2026, 7, 1, 12)); // 1 de agosto de 2026, antes de ambos pagos del mes
+
+  it('con n=0 devuelve la misma fecha de partida, sin avanzar', () => {
+    expect(avanzarNPeriodos(desde, 0)).toBe(desde);
+  });
+
+  it('con n=1 devuelve el próximo día de pago', () => {
+    expect(avanzarNPeriodos(desde, 1)).toEqual(nextPayday(desde).date);
+  });
+
+  it('con n=2 devuelve el segundo día de pago, no el mismo dos veces', () => {
+    const primero = avanzarNPeriodos(desde, 1);
+    const segundo = avanzarNPeriodos(desde, 2);
+    expect(segundo.getTime()).toBeGreaterThan(primero.getTime());
+  });
+
+  it('las fechas avanzan de forma monótona a medida que crece n', () => {
+    const fechas = [1, 2, 3, 4, 5].map((n) => avanzarNPeriodos(desde, n).getTime());
+    for (let i = 1; i < fechas.length; i++) {
+      expect(fechas[i]).toBeGreaterThan(fechas[i - 1]);
+    }
+  });
+
+  it('rechaza un n negativo o no entero', () => {
+    expect(() => avanzarNPeriodos(desde, -1)).toThrow(RangeError);
+    expect(() => avanzarNPeriodos(desde, 1.5)).toThrow(RangeError);
   });
 });

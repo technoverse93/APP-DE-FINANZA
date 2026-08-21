@@ -78,6 +78,29 @@ export function useQuincena(ahora?: Date) {
     void cargar();
   }, [cargar]);
 
+  const guardarGastosFijos = useCallback(async (siguiente: GastosFijos) => {
+    setGastosFijos(siguiente);
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      setError('No hay sesión activa: no se pueden guardar los gastos fijos');
+      return;
+    }
+    const { error: e } = await supabase.from('gastos_fijos').upsert(
+      {
+        usuario_id: user.id,
+        casa: siguiente.casa,
+        comida: siguiente.comida,
+        pases: siguiente.pases,
+        deuda_base: siguiente.deudaBase,
+        actualizado_en: new Date().toISOString(),
+      },
+      { onConflict: 'usuario_id' },
+    );
+    if (e) setError(e.message);
+  }, []);
+
   const distribucion = useMemo(
     () => (colilla === null ? null : distribuirQuincena({ colilla, gastosFijos })),
     [colilla, gastosFijos],
@@ -93,5 +116,5 @@ export function useQuincena(ahora?: Date) {
     error,
   };
 
-  return { ...estado, colilla, setColilla, setGastosFijos, recargar: cargar };
+  return { ...estado, colilla, setColilla, guardarGastosFijos, recargar: cargar };
 }
