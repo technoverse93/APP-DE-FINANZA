@@ -6,3 +6,4 @@ export { BlurHeader } from './BlurHeader';
 export { ErrorBoundary } from './ErrorBoundary';
 export { ConfigWarning } from './ConfigWarning';
 export { DistribucionDonut, type SegmentoDonut } from './DistribucionDonut';
+export { OpportunityAlertToast } from './OpportunityAlertToast';
