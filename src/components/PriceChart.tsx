@@ -17,9 +17,8 @@ interface Props {
  * propia gestión de temas, leyendas y animaciones que no usamos) no se
  * justifica frente a un puñado de líneas de SVG propio.
  *
- * Memoizado igual que CandlestickChart: el cálculo de la geometría en
- * `construirTrazado` es el más caro de la pantalla y no debería repetirse
- * cuando `precios` no cambió.
+ * Memoizado: el cálculo de la geometría en `construirTrazado` es el más
+ * caro de la pantalla y no debería repetirse cuando `precios` no cambió.
  */
 export const PriceChart = memo(function PriceChart({ precios, height = 160 }: Props) {
   const [ancho, setAncho] = useState(0);
