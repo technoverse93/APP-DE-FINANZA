@@ -18,6 +18,8 @@ import {
   type SegmentoDonut,
 } from '../components';
 import { formatearColones, type GastosFijos } from '../core/payroll/distribution';
+import { nextPayday } from '../core/payroll/schedule';
+import { calcularCostoPasesProyectado } from '../core/payroll/transporte';
 import { useQuincena } from '../state/useQuincena';
 import { pedirSincronizacion } from '../lib/backgroundSync';
 import { colors, radius, spacing, typography } from '../theme';
@@ -69,6 +71,9 @@ export function ResumenScreen() {
   const [textoPases, setTextoPases] = useState('');
   const [textoDeudaBase, setTextoDeudaBase] = useState('');
 
+  const [textoCantidadPases, setTextoCantidadPases] = useState('');
+  const [textoCostoPorPase, setTextoCostoPorPase] = useState('');
+
   const empezarEdicionGastos = useCallback(() => {
     setTextoCasa(String(gastosFijos.casa));
     setTextoComida(String(gastosFijos.comida));
@@ -87,6 +92,21 @@ export function ResumenScreen() {
     void guardarGastosFijos(siguiente);
     setEditandoGastos(false);
   }, [textoCasa, textoComida, textoPases, textoDeudaBase, guardarGastosFijos]);
+
+  /**
+   * Calcula el costo de pases de la quincena que arranca con este pago
+   * (hasta el siguiente), en vez de que el usuario lo saque a mano: cantidad
+   * de pases diarios × costo por pase × días hábiles (domingo excluido).
+   * Solo llena el campo "Pases"; sigue siendo editable a mano después.
+   */
+  const calcularPases = useCallback(() => {
+    const cantidad = limpiarMonto(textoCantidadPases);
+    const costo = limpiarMonto(textoCostoPorPase);
+    const inicioSiguiente = new Date(payday.date.getTime() + 24 * 60 * 60 * 1000);
+    const finVentana = nextPayday(inicioSiguiente).date;
+    const proyectado = calcularCostoPasesProyectado(cantidad, costo, payday.date, finVentana);
+    setTextoPases(String(proyectado));
+  }, [textoCantidadPases, textoCostoPorPase, payday]);
 
   const aplicarColilla = useCallback(() => {
     const monto = Number(texto.replace(/[^\d]/g, ''));
@@ -206,6 +226,30 @@ export function ResumenScreen() {
                   keyboardType="number-pad"
                   placeholderTextColor={colors.labelTertiary}
                 />
+                <View style={styles.calculadoraPases}>
+                  <Text style={styles.etiquetaCampo}>
+                    ¿No sabés cuánto poner? Calculalo por cantidad de pases al día:
+                  </Text>
+                  <View style={styles.filaCalculadora}>
+                    <TextInput
+                      style={[styles.inputGasto, styles.inputCalculadora]}
+                      value={textoCantidadPases}
+                      onChangeText={setTextoCantidadPases}
+                      keyboardType="number-pad"
+                      placeholder="Pases/día"
+                      placeholderTextColor={colors.labelTertiary}
+                    />
+                    <TextInput
+                      style={[styles.inputGasto, styles.inputCalculadora]}
+                      value={textoCostoPorPase}
+                      onChangeText={setTextoCostoPorPase}
+                      keyboardType="number-pad"
+                      placeholder="Costo por pase"
+                      placeholderTextColor={colors.labelTertiary}
+                    />
+                  </View>
+                  <PrimaryButton titulo="Calcular pases de la quincena" onPress={calcularPases} />
+                </View>
                 <Text style={styles.etiquetaCampo}>Deuda base</Text>
                 <TextInput
                   style={styles.inputGasto}
@@ -314,6 +358,14 @@ const styles = StyleSheet.create({
   bloqueado: { ...typography.subheadline, color: colors.labelSecondary },
   tarjetaDonut: { marginBottom: spacing.md },
   etiquetaCampo: { ...typography.footnote, color: colors.labelSecondary },
+  calculadoraPases: {
+    gap: spacing.sm,
+    backgroundColor: colors.fill,
+    borderRadius: radius.md,
+    padding: spacing.md,
+  },
+  filaCalculadora: { flexDirection: 'row', gap: spacing.sm },
+  inputCalculadora: { flex: 1, backgroundColor: colors.surface },
   inputGasto: {
     ...typography.body,
     backgroundColor: colors.fill,

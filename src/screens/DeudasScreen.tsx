@@ -8,7 +8,8 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { BlurHeader, Card, ListRow, PrimaryButton, SectionHeader } from '../components';
+import { BlurHeader, Card, ListRow, OpportunityAlertToast, PrimaryButton, SectionHeader } from '../components';
+import { calcularCostoOportunidad, type CostoOportunidad } from '../core/analytics/opportunityCost';
 import { priorizarAbonoExtra, proyectarConGamificacion } from '../core/debt/crusher';
 import { formatearColones } from '../core/payroll/distribution';
 import { type Deuda, useDeudas } from '../state/useDeudas';
@@ -67,13 +68,20 @@ export function DeudasScreen() {
   const [deudaSeleccionadaId, setDeudaSeleccionadaId] = useState<string | null>(null);
   const [textoAbonoExtra, setTextoAbonoExtra] = useState('');
 
+  const [alertaCosto, setAlertaCosto] = useState<CostoOportunidad | null>(null);
+
   const agregarMovimiento = useCallback(() => {
     const monto = limpiarMonto(textoMontoLibro);
     if (monto <= 0) return;
     void libro.agregar({ tipo: tipoLibro, monto, descripcion: descripcionLibro });
+    // El costo de oportunidad solo aplica a gastos: un ingreso no compite con
+    // la deuda por el mismo colón.
+    setAlertaCosto(
+      tipoLibro === 'gasto' ? calcularCostoOportunidad(monto, deudasHook.deudas) : null,
+    );
     setTextoMontoLibro('');
     setDescripcionLibro('');
-  }, [textoMontoLibro, descripcionLibro, tipoLibro, libro]);
+  }, [textoMontoLibro, descripcionLibro, tipoLibro, libro, deudasHook.deudas]);
 
   const deudaSeleccionada: Deuda | null = useMemo(
     () => deudasHook.deudas.find((d) => d.id === deudaSeleccionadaId) ?? deudasHook.deudas[0] ?? null,
@@ -152,6 +160,11 @@ export function DeudasScreen() {
               <PrimaryButton titulo="Anotar" onPress={agregarMovimiento} />
             </View>
           </Card>
+          {alertaCosto ? (
+            <View style={styles.avisoCostoOportunidad}>
+              <OpportunityAlertToast costo={alertaCosto} onCerrar={() => setAlertaCosto(null)} />
+            </View>
+          ) : null}
         </View>
 
         <View style={styles.seccion}>
@@ -281,6 +294,7 @@ const styles = StyleSheet.create({
   pantalla: { flex: 1, backgroundColor: colors.background },
   contenido: { padding: spacing.lg, gap: spacing.xl, paddingBottom: spacing.xxxl },
   seccion: { gap: 0 },
+  avisoCostoOportunidad: { marginTop: spacing.md },
   formulario: { gap: spacing.md },
   filaTipo: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' },
   chip: {
