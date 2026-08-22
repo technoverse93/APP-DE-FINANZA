@@ -1,9 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { CryptoScreen } from '../screens/CryptoScreen';
 import { DeudasScreen } from '../screens/DeudasScreen';
-import { InversionScreen } from '../screens/InversionScreen';
 import { ResumenScreen } from '../screens/ResumenScreen';
 import { colors, typography } from '../theme';
 
@@ -19,8 +17,6 @@ import { colors, typography } from '../theme';
 export type RootTabParamList = {
   Inicio: undefined;
   Deudas: undefined;
-  Inversión: undefined;
-  Cripto: undefined;
 };
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
@@ -40,8 +36,6 @@ const temaNavegacion = {
 const ICONOS: Record<keyof RootTabParamList, { activo: keyof typeof Ionicons.glyphMap; inactivo: keyof typeof Ionicons.glyphMap }> = {
   Inicio: { activo: 'home', inactivo: 'home-outline' },
   Deudas: { activo: 'flame', inactivo: 'flame-outline' },
-  Inversión: { activo: 'trending-up', inactivo: 'trending-up-outline' },
-  Cripto: { activo: 'logo-bitcoin', inactivo: 'logo-bitcoin' },
 };
 
 export function RootTabs() {
@@ -71,8 +65,6 @@ export function RootTabs() {
       >
         <Tab.Screen name="Inicio" component={ResumenScreen} />
         <Tab.Screen name="Deudas" component={DeudasScreen} />
-        <Tab.Screen name="Inversión" component={InversionScreen} />
-        <Tab.Screen name="Cripto" component={CryptoScreen} />
       </Tab.Navigator>
     </NavigationContainer>
   );

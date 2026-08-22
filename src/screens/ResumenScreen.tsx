@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   RefreshControl,
   ScrollView,
@@ -8,7 +8,15 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native';
-import { BlurHeader, Card, ListRow, PrimaryButton, SectionHeader } from '../components';
+import {
+  BlurHeader,
+  Card,
+  DistribucionDonut,
+  ListRow,
+  PrimaryButton,
+  SectionHeader,
+  type SegmentoDonut,
+} from '../components';
 import { formatearColones, type GastosFijos } from '../core/payroll/distribution';
 import { useQuincena } from '../state/useQuincena';
 import { pedirSincronizacion } from '../lib/backgroundSync';
@@ -98,6 +106,16 @@ export function ResumenScreen() {
   const onRefresh = useCallback(() => {
     void sincronizar();
   }, [sincronizar]);
+
+  const segmentosDistribucion: SegmentoDonut[] = useMemo(() => {
+    if (!distribucion) return [];
+    return [
+      { etiqueta: 'Gastos fijos', valor: distribucion.totalGastosFijos, color: colors.labelTertiary },
+      { etiqueta: 'Reserva de seguridad', valor: distribucion.reserva, color: colors.blue },
+      { etiqueta: 'Abono a capital', valor: distribucion.abonoCapitalSugerido, color: colors.green },
+      { etiqueta: 'Falta para la reserva', valor: distribucion.faltante, color: colors.red },
+    ];
+  }, [distribucion]);
 
   return (
     <SafeAreaView style={styles.pantalla}>
@@ -229,6 +247,9 @@ export function ResumenScreen() {
         {distribucion ? (
           <View style={styles.seccion}>
             <SectionHeader titulo="Distribución" />
+            <Card style={styles.tarjetaDonut}>
+              <DistribucionDonut segmentos={segmentosDistribucion} />
+            </Card>
             <Card sinRelleno>
               <ListRow
                 titulo="Total gastos fijos"
@@ -291,6 +312,7 @@ const styles = StyleSheet.create({
     color: colors.label,
   },
   bloqueado: { ...typography.subheadline, color: colors.labelSecondary },
+  tarjetaDonut: { marginBottom: spacing.md },
   etiquetaCampo: { ...typography.footnote, color: colors.labelSecondary },
   inputGasto: {
     ...typography.body,
