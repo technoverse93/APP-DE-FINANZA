@@ -50,7 +50,7 @@ export class RedSinRespuestaError extends Error {
  * TCP, un proxy que nunca cierra el túnel) deja cualquier pantalla que
  * dependa de Supabase girando el spinner para siempre: `fetch` no tiene
  * timeout propio y una promesa que nunca se resuelve nunca dispara el
- * `catch` del componente. Se detectó al ver `useMarketData` quedarse
+ * `catch` del componente. Se detectó al ver una pantalla quedarse
  * cargando indefinidamente contra una red caída.
  */
 const fetchConTimeout: typeof fetch = (input, init) => {

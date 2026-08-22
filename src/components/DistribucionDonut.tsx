@@ -18,10 +18,10 @@ interface Props {
 const GROSOR_TRAZO = 18;
 
 /**
- * Donut de distribución, dibujado a mano con react-native-svg (mismo enfoque
- * que PriceChart: unos pocos círculos con stroke-dasharray, no una librería
- * de charting completa). Cada segmento es una fracción de la suma de los
- * valores recibidos — no asume que suman un total externo (como la colilla),
+ * Donut de distribución, dibujado a mano con react-native-svg (unos pocos
+ * círculos con stroke-dasharray, no una librería de charting completa).
+ * Cada segmento es una fracción de la suma de los valores recibidos — no
+ * asume que suman un total externo (como la colilla),
  * así que sigue siendo válido aunque algún escenario (ej. déficit) no cierre
  * exacto contra esa cifra.
  */

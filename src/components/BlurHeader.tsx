@@ -17,7 +17,7 @@ const LOGO_TECHNOVERSE = require('../../assets/brand/technoverse-logo.png');
  * Lleva una fila superior fija con el logo de Technoverse y el nombre de la
  * app ("Finanzas"), la misma en todas las pantallas; el `titulo` que recibe
  * cada pantalla es el título grande de esa sección en particular (p. ej.
- * "Quincena", "Inversión"), no el nombre de la app.
+ * "Quincena", "Deudas"), no el nombre de la app.
  *
  * Memoizado: aparece en todas las pantallas y toma solo props primitivas
  * (texto), así que evita re-renderizar el `BlurView` — el elemento más caro
