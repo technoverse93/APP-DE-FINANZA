@@ -20,6 +20,17 @@
  * Supabase Vault, nunca en el teléfono ni en este repositorio:
  *   - binance_testnet_api_key / binance_testnet_api_secret
  *   - binance_api_key / binance_api_secret
+ *
+ * En mainnet, además, la petición a Binance sale a través de un proxy HTTP
+ * propio (un servidor con IP fija, fuera de Supabase) en vez de salir
+ * directo. Esto no es una preferencia: Supabase Edge Functions no tienen
+ * una IP de salida fija (corren en una red global de Deno Deploy), y
+ * Binance exige restringir la key a IPs conocidas en cuanto se habilita
+ * cualquier permiso más allá de solo lectura — sin eso, Binance borra la
+ * key sola. El proxy nunca ve la API key ni el secret: la firma HMAC ya
+ * viaja armada en la URL: el proxy solo reenvía bytes a api.binance.com.
+ * Su dirección vive en Vault como `binance_proxy_url`
+ * (`http://usuario:password@IP:PUERTO`).
  */
 
 import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2';
@@ -98,6 +109,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   try {
     const { apiKey, apiSecret } = await leerCredencialesBinance(servicio, entorno);
+    const proxyUrl = entorno === 'mainnet' ? await leerSecreto(servicio, 'binance_proxy_url') : null;
     const resultado = await enviarOrdenBinance({
       entorno,
       simbolo,
@@ -105,6 +117,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       cantidad: cantidad as number,
       apiKey,
       apiSecret,
+      proxyUrl,
     });
 
     await servicio.from('crypto_ordenes_reales').insert({
@@ -209,6 +222,8 @@ async function enviarOrdenBinance(params: {
   cantidad: number;
   apiKey: string;
   apiSecret: string;
+  /** Proxy con IP fija para mainnet (ver comentario del encabezado). null en testnet. */
+  proxyUrl: string | null;
 }): Promise<ResultadoOrden> {
   const query = new URLSearchParams({
     symbol: params.simbolo,
@@ -223,9 +238,13 @@ async function enviarOrdenBinance(params: {
   query.set('signature', firma);
 
   const url = `${BASE_URL[params.entorno]}/api/v3/order?${query.toString()}`;
+  const cliente = params.proxyUrl
+    ? Deno.createHttpClient({ proxy: { url: params.proxyUrl } })
+    : undefined;
   const respuesta = await fetch(url, {
     method: 'POST',
     headers: { 'X-MBX-APIKEY': params.apiKey },
+    client: cliente,
   });
 
   const cuerpo = await respuesta.json();
