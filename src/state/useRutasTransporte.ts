@@ -6,6 +6,8 @@ export interface TramoTransporte {
   readonly origen: string;
   readonly destino: string;
   readonly precio: number;
+  /** Cuántas veces se usa este tramo en un mismo día hábil (ida y vuelta = 2). */
+  readonly usosPorDia: number;
 }
 
 /**
@@ -25,7 +27,7 @@ export function useRutasTransporte() {
     try {
       const { data, error: e } = await supabase
         .from('rutas_transporte')
-        .select('id, origen, destino, precio')
+        .select('id, origen, destino, precio, usos_por_dia')
         .order('orden', { ascending: true });
       if (e) throw e;
       setTramos(
@@ -34,6 +36,7 @@ export function useRutasTransporte() {
           origen: t.origen as string,
           destino: t.destino as string,
           precio: Number(t.precio),
+          usosPorDia: Number(t.usos_por_dia),
         })),
       );
     } catch (e) {
@@ -48,7 +51,7 @@ export function useRutasTransporte() {
   }, [cargar]);
 
   const agregar = useCallback(
-    async (tramo: { origen: string; destino: string; precio: number }) => {
+    async (tramo: { origen: string; destino: string; precio: number; usosPorDia: number }) => {
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -61,6 +64,7 @@ export function useRutasTransporte() {
         origen: tramo.origen,
         destino: tramo.destino,
         precio: tramo.precio,
+        usos_por_dia: tramo.usosPorDia,
         orden: tramos.length,
       });
       if (e) {
@@ -84,8 +88,10 @@ export function useRutasTransporte() {
     [cargar],
   );
 
+  // El costo diario ya no es la suma de precios: cada tramo pesa por su
+  // frecuencia de uso en el día (un tramo de ida y vuelta cuenta dos veces).
   const costoDiarioTotal = useMemo(
-    () => tramos.reduce((suma, t) => suma + t.precio, 0),
+    () => tramos.reduce((suma, t) => suma + t.precio * t.usosPorDia, 0),
     [tramos],
   );
 
