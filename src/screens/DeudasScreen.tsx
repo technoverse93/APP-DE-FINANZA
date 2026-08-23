@@ -49,7 +49,7 @@ const FilaMovimiento = memo(function FilaMovimiento({
   return (
     <ListRow
       titulo={movimiento.descripcion || (movimiento.tipo === 'gasto' ? 'Gasto' : 'Ingreso')}
-      detalle={movimiento.fecha}
+      detalle={movimiento.categoria ? `${movimiento.categoria} · ${movimiento.fecha}` : movimiento.fecha}
       valor={formatearColones(movimiento.monto)}
       tono={movimiento.tipo === 'gasto' ? 'negativo' : 'positivo'}
       ultima={ultima}
@@ -63,6 +63,7 @@ export function DeudasScreen() {
 
   const [textoMontoLibro, setTextoMontoLibro] = useState('');
   const [descripcionLibro, setDescripcionLibro] = useState('');
+  const [categoriaLibro, setCategoriaLibro] = useState('');
   const [tipoLibro, setTipoLibro] = useState<'gasto' | 'ingreso'>('gasto');
 
   const [deudaSeleccionadaId, setDeudaSeleccionadaId] = useState<string | null>(null);
@@ -73,7 +74,12 @@ export function DeudasScreen() {
   const agregarMovimiento = useCallback(() => {
     const monto = limpiarMonto(textoMontoLibro);
     if (monto <= 0) return;
-    void libro.agregar({ tipo: tipoLibro, monto, descripcion: descripcionLibro });
+    void libro.agregar({
+      tipo: tipoLibro,
+      monto,
+      descripcion: descripcionLibro,
+      categoria: categoriaLibro.trim() || null,
+    });
     // El costo de oportunidad solo aplica a gastos: un ingreso no compite con
     // la deuda por el mismo colón.
     setAlertaCosto(
@@ -81,7 +87,8 @@ export function DeudasScreen() {
     );
     setTextoMontoLibro('');
     setDescripcionLibro('');
-  }, [textoMontoLibro, descripcionLibro, tipoLibro, libro, deudasHook.deudas]);
+    setCategoriaLibro('');
+  }, [textoMontoLibro, descripcionLibro, categoriaLibro, tipoLibro, libro, deudasHook.deudas]);
 
   const deudaSeleccionada: Deuda | null = useMemo(
     () => deudasHook.deudas.find((d) => d.id === deudaSeleccionadaId) ?? deudasHook.deudas[0] ?? null,
@@ -148,6 +155,17 @@ export function DeudasScreen() {
                 onChangeText={setTextoMontoLibro}
                 keyboardType="number-pad"
                 placeholder="Monto"
+                placeholderTextColor={colors.labelTertiary}
+              />
+              <TextInput
+                style={styles.input}
+                value={categoriaLibro}
+                onChangeText={setCategoriaLibro}
+                placeholder={
+                  tipoLibro === 'ingreso'
+                    ? 'Categoría (ej. Ventas, Reparaciones de hardware)'
+                    : 'Categoría (opcional)'
+                }
                 placeholderTextColor={colors.labelTertiary}
               />
               <TextInput

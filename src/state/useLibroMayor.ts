@@ -9,6 +9,8 @@ export interface MovimientoLibro {
   readonly monto: number;
   readonly descripcion: string;
   readonly fecha: string;
+  /** Ej. "Ventas", "Reparaciones de hardware"; opcional. */
+  readonly categoria: string | null;
 }
 
 export interface ResumenLibroMayor {
@@ -34,7 +36,7 @@ export function useLibroMayor() {
     try {
       const { data, error: e } = await supabase
         .from('libro_mayor')
-        .select('id, tipo, monto, descripcion, fecha')
+        .select('id, tipo, monto, descripcion, fecha, categoria')
         .order('fecha', { ascending: false })
         .limit(200);
       if (e) throw e;
@@ -45,6 +47,7 @@ export function useLibroMayor() {
           monto: Number(m.monto),
           descripcion: m.descripcion as string,
           fecha: m.fecha as string,
+          categoria: (m.categoria as string | null) ?? null,
         })),
       );
     } catch (e) {
@@ -59,7 +62,12 @@ export function useLibroMayor() {
   }, [cargar]);
 
   const agregar = useCallback(
-    async (entrada: { tipo: TipoMovimientoLibro; monto: number; descripcion: string }) => {
+    async (entrada: {
+      tipo: TipoMovimientoLibro;
+      monto: number;
+      descripcion: string;
+      categoria?: string | null;
+    }) => {
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -72,6 +80,7 @@ export function useLibroMayor() {
         tipo: entrada.tipo,
         monto: entrada.monto,
         descripcion: entrada.descripcion,
+        categoria: entrada.categoria ?? null,
       });
       if (e) {
         setError(e.message);

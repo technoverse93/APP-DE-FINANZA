@@ -1,4 +1,4 @@
-import { calcularCostoPasesProyectado, diasHabilesTransporte } from '../src/core/payroll/transporte';
+import { calcularCostoTransporteProyectado, diasHabilesTransporte } from '../src/core/payroll/transporte';
 
 describe('diasHabilesTransporte', () => {
   it('cuenta los 15 días de una quincena excluyendo los domingos', () => {
@@ -27,16 +27,15 @@ describe('diasHabilesTransporte', () => {
   });
 });
 
-describe('calcularCostoPasesProyectado', () => {
-  it('multiplica cantidad × costo × días hábiles', () => {
+describe('calcularCostoTransporteProyectado', () => {
+  it('multiplica el costo diario × días hábiles', () => {
     const desde = new Date(Date.UTC(2026, 7, 13));
     const hasta = new Date(Date.UTC(2026, 7, 28)); // 13 días hábiles (ver arriba)
-    expect(calcularCostoPasesProyectado(2, 500, desde, hasta)).toBe(2 * 500 * 13);
+    expect(calcularCostoTransporteProyectado(1_000, desde, hasta)).toBe(1_000 * 13);
   });
 
-  it('rechaza cantidades negativas', () => {
+  it('rechaza un costo diario negativo', () => {
     const fecha = new Date(Date.UTC(2026, 7, 13));
-    expect(() => calcularCostoPasesProyectado(-1, 500, fecha, fecha)).toThrow(RangeError);
-    expect(() => calcularCostoPasesProyectado(1, -500, fecha, fecha)).toThrow(RangeError);
+    expect(() => calcularCostoTransporteProyectado(-500, fecha, fecha)).toThrow(RangeError);
   });
 });

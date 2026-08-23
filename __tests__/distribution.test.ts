@@ -101,6 +101,14 @@ describe('distribuirQuincena', () => {
     expect(r.faltante).toBe(SAFETY_MIN + 150_000);
   });
 
+  it('acepta una colilla ya negativa (ingreso disponible en déficit) sin lanzar', () => {
+    const sinGastos = { casa: 0, comida: 0, pases: 0, deudaBase: 0 };
+    const r = distribuirQuincena({ colilla: -50_000, gastosFijos: sinGastos });
+    expect(r.estado).toBe('deficit');
+    expect(r.remanente).toBe(-50_000);
+    expect(r.reserva).toBe(0);
+  });
+
   it('la reserva más el abono nunca exceden el remanente', () => {
     for (const colilla of [400_000, 520_000, 525_000, 530_000, 600_000, 1_200_000]) {
       const r = distribuirQuincena({ colilla, gastosFijos: gastos });
@@ -131,8 +139,7 @@ describe('distribuirQuincena', () => {
     expect(DEFAULT_SAFETY_BAND).toEqual({ min: 170_000, max: 175_000 });
   });
 
-  it('rechaza montos negativos', () => {
-    expect(() => distribuirQuincena({ colilla: -1, gastosFijos: gastos })).toThrow(RangeError);
+  it('rechaza gastos fijos negativos (la colilla sí puede ser negativa, ver otro test)', () => {
     expect(() =>
       distribuirQuincena({ colilla: 600_000, gastosFijos: { ...gastos, casa: -1 } }),
     ).toThrow(RangeError);
