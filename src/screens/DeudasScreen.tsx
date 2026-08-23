@@ -20,6 +20,7 @@ import {
 import { calcularCostoOportunidad, type CostoOportunidad } from '../core/analytics/opportunityCost';
 import { priorizarAbonoExtra, proyectarConGamificacion } from '../core/debt/crusher';
 import { formatearColones } from '../core/payroll/distribution';
+import { googleAuthConfigurado } from '../lib/googleAuth';
 import { type Deuda, useDeudas } from '../state/useDeudas';
 import { type MovimientoLibro, useLibroMayor } from '../state/useLibroMayor';
 import { colors, radius, spacing, typography } from '../theme';
@@ -139,9 +140,11 @@ export function DeudasScreen() {
         contentContainerStyle={styles.contenido}
         refreshControl={<RefreshControl refreshing={refrescando} onRefresh={recargarTodo} />}
       >
-        <View style={styles.seccion}>
-          <GmailSyncCard />
-        </View>
+        {googleAuthConfigurado ? (
+          <View style={styles.seccion}>
+            <GmailSyncCard />
+          </View>
+        ) : null}
 
         <View style={styles.seccion}>
           <SectionHeader titulo="Libro Mayor" />

@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { googleAuthConfigurado, useGoogleGmailAuth } from '../lib/googleAuth';
+import { useGoogleGmailAuth } from '../lib/googleAuth';
 import { sincronizarGmail } from '../lib/gmailSync';
 import { colors, radius, spacing, typography } from '../theme';
 import { Card } from './Card';
@@ -12,12 +12,15 @@ import { PrimaryButton } from './PrimaryButton';
  * es una fuente adicional, pensada para cuando el usuario quiere forzar una
  * lectura inmediata sin esperar al próximo ciclo del cron.
  *
- * Si `EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID` no está configurado (ver
- * docs/gmail-oauth.md), la tarjeta se oculta sola en vez de mostrar un
- * botón que solo puede fallar.
+ * Quien la usa debe renderizarla solo si `googleAuthConfigurado` (de
+ * `../lib/googleAuth`) es true, y no montarla en absoluto si no — el hook de
+ * Google de abajo lanza una excepción síncrona en cuanto se llama sin sus
+ * client IDs, así que la comprobación tiene que pasar ANTES de que este
+ * componente exista, no adentro (acá ya sería tarde: el hook ya se llamó al
+ * evaluar el cuerpo del componente).
  */
 export function GmailSyncCard() {
-  const [request, response, promptAsync] = useGoogleGmailAuth();
+  const [request, , promptAsync] = useGoogleGmailAuth();
   const [sincronizando, setSincronizando] = useState(false);
   const [resultado, setResultado] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -45,8 +48,6 @@ export function GmailSyncCard() {
       setSincronizando(false);
     }
   }, [promptAsync]);
-
-  if (!googleAuthConfigurado) return null;
 
   return (
     <Card>
