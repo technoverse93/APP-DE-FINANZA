@@ -1,5 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import {
+  KeyboardAvoidingView,
+  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -7,7 +9,10 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native';
+// De safe-area-context, NO de react-native: el SafeAreaView de react-native
+// es exclusivo de iOS y en Android no reserva nada, así que el contenido
+// terminaba debajo de la barra de navegación del sistema.
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   BlurHeader,
   Card,
@@ -17,11 +22,13 @@ import {
   SectionHeader,
   type SegmentoDonut,
 } from '../components';
+import { debePedirColilla, fechaAvisoColilla } from '../core/payroll/colilla';
 import { distribuirQuincena, formatearColones, type GastosFijos } from '../core/payroll/distribution';
 import { calcularIngresoDisponible } from '../core/payroll/ingresoDisponible';
 import { previousPayday } from '../core/payroll/schedule';
 import { calcularCostoTransporteProyectado } from '../core/payroll/transporte';
 import { pedirSincronizacion } from '../lib/backgroundSync';
+import { useColilla } from '../state/useColilla';
 import { useLibroMayor } from '../state/useLibroMayor';
 import { useQuincena } from '../state/useQuincena';
 import { useRutasTransporte } from '../state/useRutasTransporte';
@@ -68,8 +75,10 @@ export function ResumenScreen() {
   const libro = useLibroMayor();
   const rutas = useRutasTransporte();
   const transacciones = useTransacciones();
+  const colilla = useColilla(payday);
 
   const [sincronizando, setSincronizando] = useState(false);
+  const [textoColilla, setTextoColilla] = useState('');
 
   const [editandoGastos, setEditandoGastos] = useState(false);
   const [textoCasa, setTextoCasa] = useState('');
@@ -170,13 +179,32 @@ export function ResumenScreen() {
   const ingresoDisponible = useMemo(
     () =>
       calcularIngresoDisponible({
+        // La colilla confirmada, cuando existe, reemplaza al ingreso base
+        // fijo: es el monto real depositado. Sin confirmar, se usa la base.
+        ingresoBase: colilla.monto ?? undefined,
         ingresosExtra: ingresosExtraQuincena,
         transporteProyectado,
         gastosDiariosReales,
         otrosGastosFijos,
       }),
-    [ingresosExtraQuincena, transporteProyectado, gastosDiariosReales, otrosGastosFijos],
+    [
+      colilla.monto,
+      ingresosExtraQuincena,
+      transporteProyectado,
+      gastosDiariosReales,
+      otrosGastosFijos,
+    ],
   );
+
+  /** ¿Estamos dentro de los 2 días previos al pago (o el día mismo)? */
+  const pedirColilla = useMemo(() => debePedirColilla(new Date(), payday), [payday]);
+
+  const confirmarColilla = useCallback(() => {
+    const monto = limpiarMonto(textoColilla);
+    if (monto <= 0) return;
+    void colilla.confirmar(monto);
+    setTextoColilla('');
+  }, [textoColilla, colilla]);
 
   const distribucion = useMemo(
     () => distribuirQuincena({ colilla: ingresoDisponible, gastosFijos: GASTOS_FIJOS_YA_APLICADOS }),
@@ -195,19 +223,29 @@ export function ResumenScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.pantalla}>
+    // `edges` sin 'bottom': el dock de pestañas ya reserva ese borde por su
+    // cuenta (ver RootTabs), y reservarlo dos veces deja una franja muerta.
+    <SafeAreaView style={styles.pantalla} edges={['top', 'left', 'right']}>
       <BlurHeader titulo="Quincena" subtitulo={`Próximo pago: ${fechaLegible(payday.date)}`} />
 
-      <ScrollView
-        contentContainerStyle={styles.contenido}
-        refreshControl={<RefreshControl refreshing={sincronizando} onRefresh={onRefresh} />}
+      <KeyboardAvoidingView
+        style={styles.flexible}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
+        <ScrollView
+          contentContainerStyle={styles.contenido}
+          // Sin esto, con el teclado abierto el primer toque sobre un botón
+          // solo cierra el teclado y el botón parece no responder.
+          keyboardShouldPersistTaps="handled"
+          refreshControl={<RefreshControl refreshing={sincronizando} onRefresh={onRefresh} />}
+        >
         <Card>
           <Text style={styles.etiqueta}>Ingreso disponible de esta quincena</Text>
           <Text style={styles.monto}>{formatearColones(ingresoDisponible)}</Text>
           <Text style={styles.pie}>
-            170.000 + ingresos extra − transporte proyectado − gastos diarios reales − otros
-            gastos fijos
+            {colilla.monto !== null
+              ? `Colilla confirmada de ${formatearColones(colilla.monto)} + ingresos extra − transporte − gastos diarios − otros gastos fijos`
+              : '170.000 (base) + ingresos extra − transporte proyectado − gastos diarios reales − otros gastos fijos'}
           </Text>
           {payday.movedFromWeekend ? (
             <View style={styles.aviso}>
@@ -217,6 +255,30 @@ export function ResumenScreen() {
             </View>
           ) : null}
         </Card>
+
+        {pedirColilla ? (
+          <View style={styles.seccion}>
+            <SectionHeader titulo="Colilla de esta quincena" />
+            <Card>
+              <Text style={styles.etiquetaCampo}>
+                {colilla.monto !== null
+                  ? `Confirmaste ${formatearColones(colilla.monto)}. Podés corregirlo si el monto cambió.`
+                  : 'Faltan menos de 2 días para el pago. Confirmá el monto exacto que te depositan para ajustar el cálculo de esta quincena.'}
+              </Text>
+              <View style={styles.formularioColilla}>
+                <TextInput
+                  style={styles.inputGasto}
+                  value={textoColilla}
+                  onChangeText={setTextoColilla}
+                  keyboardType="number-pad"
+                  placeholder="Monto exacto de la colilla"
+                  placeholderTextColor={colors.labelTertiary}
+                />
+                <PrimaryButton titulo="Confirmar colilla" onPress={confirmarColilla} />
+              </View>
+            </Card>
+          </View>
+        ) : null}
 
         <View style={styles.seccion}>
           <SectionHeader titulo="Esta quincena" />
@@ -372,13 +434,15 @@ export function ResumenScreen() {
             />
           </Card>
         </View>
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   pantalla: { flex: 1, backgroundColor: colors.background },
+  flexible: { flex: 1 },
   contenido: { padding: spacing.lg, gap: spacing.xl, paddingBottom: spacing.xxxl },
   seccion: { gap: 0 },
   etiqueta: { ...typography.footnote, color: colors.labelSecondary },
@@ -393,6 +457,7 @@ const styles = StyleSheet.create({
   avisoTexto: { ...typography.footnote, color: colors.label },
   formulario: { gap: spacing.lg },
   formularioTramo: { gap: spacing.sm, marginTop: spacing.sm },
+  formularioColilla: { gap: spacing.md, marginTop: spacing.md },
   notaLibroMayor: {
     ...typography.footnote,
     color: colors.labelSecondary,

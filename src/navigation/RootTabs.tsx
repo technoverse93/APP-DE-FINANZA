@@ -1,9 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DeudasScreen } from '../screens/DeudasScreen';
 import { ResumenScreen } from '../screens/ResumenScreen';
-import { colors, typography } from '../theme';
+import { colors, spacing, typography } from '../theme';
+
+/** Alto del dock sin contar la franja del sistema. */
+const ALTO_DOCK = 56;
 
 /**
  * Navegación raíz: dock inferior con ícono + etiqueta corta, el mismo patrón
@@ -39,6 +43,12 @@ const ICONOS: Record<keyof RootTabParamList, { activo: keyof typeof Ionicons.gly
 };
 
 export function RootTabs() {
+  // En Android con navegación por gestos (el caso del Galaxy A12) el sistema
+  // se reserva una franja inferior; sin sumarla a la altura del dock, la fila
+  // de pestañas queda por debajo de esa franja: se ve cortada a la mitad y el
+  // toque no llega al botón, lo recibe el sistema.
+  const insets = useSafeAreaInsets();
+
   return (
     <NavigationContainer theme={temaNavegacion}>
       <Tab.Navigator
@@ -49,6 +59,9 @@ export function RootTabs() {
           tabBarStyle: {
             backgroundColor: colors.surface,
             borderTopColor: colors.separator,
+            height: ALTO_DOCK + insets.bottom,
+            paddingBottom: insets.bottom + spacing.xs,
+            paddingTop: spacing.xs,
           },
           tabBarLabelStyle: { ...typography.caption2, fontWeight: '600' },
           tabBarIcon: ({ focused, color, size }) => {

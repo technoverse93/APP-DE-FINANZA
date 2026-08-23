@@ -1,5 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
-import { StyleSheet, Text, View, Pressable, SafeAreaView } from 'react-native';
+import { StyleSheet, Text, View, Pressable } from 'react-native';
+// De safe-area-context, NO de react-native (ese es exclusivo de iOS).
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, radius, spacing, typography } from '../theme';
 
 /**
