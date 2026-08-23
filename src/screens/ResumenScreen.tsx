@@ -17,11 +17,15 @@ import {
   SectionHeader,
   type SegmentoDonut,
 } from '../components';
-import { formatearColones, type GastosFijos } from '../core/payroll/distribution';
-import { nextPayday } from '../core/payroll/schedule';
-import { calcularCostoPasesProyectado } from '../core/payroll/transporte';
-import { useQuincena } from '../state/useQuincena';
+import { distribuirQuincena, formatearColones, type GastosFijos } from '../core/payroll/distribution';
+import { calcularIngresoDisponible } from '../core/payroll/ingresoDisponible';
+import { previousPayday } from '../core/payroll/schedule';
+import { calcularCostoTransporteProyectado } from '../core/payroll/transporte';
 import { pedirSincronizacion } from '../lib/backgroundSync';
+import { useLibroMayor } from '../state/useLibroMayor';
+import { useQuincena } from '../state/useQuincena';
+import { useRutasTransporte } from '../state/useRutasTransporte';
+import { useTransacciones } from '../state/useTransacciones';
 import { colors, radius, spacing, typography } from '../theme';
 
 const FORMATO_FECHA = new Intl.DateTimeFormat('es-CR', {
@@ -46,38 +50,39 @@ const ETIQUETAS_ESTADO = {
   holgado: { texto: 'Con excedente para capital', tono: 'positivo' },
 } as const;
 
+const GASTOS_FIJOS_YA_APLICADOS: GastosFijos = { casa: 0, comida: 0, pases: 0, deudaBase: 0 };
+
 function limpiarMonto(texto: string): number {
   const n = Number(texto.replace(/[^\d]/g, ''));
   return Number.isFinite(n) ? n : 0;
 }
 
+/** ¿La fecha/hora ISO cae dentro de [inicio, fin)? */
+function dentroDeVentana(fechaIso: string, inicio: Date, fin: Date): boolean {
+  const t = new Date(fechaIso).getTime();
+  return t >= inicio.getTime() && t < fin.getTime();
+}
+
 export function ResumenScreen() {
-  const {
-    payday,
-    ventanaAbierta,
-    abreEl,
-    gastosFijos,
-    distribucion,
-    setColilla,
-    guardarGastosFijos,
-    recargar,
-  } = useQuincena();
-  const [texto, setTexto] = useState('');
+  const { payday, gastosFijos, guardarGastosFijos, recargar } = useQuincena();
+  const libro = useLibroMayor();
+  const rutas = useRutasTransporte();
+  const transacciones = useTransacciones();
+
   const [sincronizando, setSincronizando] = useState(false);
 
   const [editandoGastos, setEditandoGastos] = useState(false);
   const [textoCasa, setTextoCasa] = useState('');
   const [textoComida, setTextoComida] = useState('');
-  const [textoPases, setTextoPases] = useState('');
   const [textoDeudaBase, setTextoDeudaBase] = useState('');
 
-  const [textoCantidadPases, setTextoCantidadPases] = useState('');
-  const [textoCostoPorPase, setTextoCostoPorPase] = useState('');
+  const [textoOrigen, setTextoOrigen] = useState('');
+  const [textoDestino, setTextoDestino] = useState('');
+  const [textoPrecioTramo, setTextoPrecioTramo] = useState('');
 
   const empezarEdicionGastos = useCallback(() => {
     setTextoCasa(String(gastosFijos.casa));
     setTextoComida(String(gastosFijos.comida));
-    setTextoPases(String(gastosFijos.pases));
     setTextoDeudaBase(String(gastosFijos.deudaBase));
     setEditandoGastos(true);
   }, [gastosFijos]);
@@ -86,56 +91,108 @@ export function ResumenScreen() {
     const siguiente: GastosFijos = {
       casa: limpiarMonto(textoCasa),
       comida: limpiarMonto(textoComida),
-      pases: limpiarMonto(textoPases),
+      // El transporte ya no vive acá: lo calcula la sección "Rutas de
+      // transporte" a partir de los tramos. Se conserva en 0 para no romper
+      // la columna `pases` ya guardada de instalaciones anteriores.
+      pases: 0,
       deudaBase: limpiarMonto(textoDeudaBase),
     };
     void guardarGastosFijos(siguiente);
     setEditandoGastos(false);
-  }, [textoCasa, textoComida, textoPases, textoDeudaBase, guardarGastosFijos]);
+  }, [textoCasa, textoComida, textoDeudaBase, guardarGastosFijos]);
 
-  /**
-   * Calcula el costo de pases de la quincena que arranca con este pago
-   * (hasta el siguiente), en vez de que el usuario lo saque a mano: cantidad
-   * de pases diarios × costo por pase × días hábiles (domingo excluido).
-   * Solo llena el campo "Pases"; sigue siendo editable a mano después.
-   */
-  const calcularPases = useCallback(() => {
-    const cantidad = limpiarMonto(textoCantidadPases);
-    const costo = limpiarMonto(textoCostoPorPase);
-    const inicioSiguiente = new Date(payday.date.getTime() + 24 * 60 * 60 * 1000);
-    const finVentana = nextPayday(inicioSiguiente).date;
-    const proyectado = calcularCostoPasesProyectado(cantidad, costo, payday.date, finVentana);
-    setTextoPases(String(proyectado));
-  }, [textoCantidadPases, textoCostoPorPase, payday]);
-
-  const aplicarColilla = useCallback(() => {
-    const monto = Number(texto.replace(/[^\d]/g, ''));
-    setColilla(Number.isFinite(monto) && monto > 0 ? monto : null);
-  }, [texto, setColilla]);
+  const agregarTramo = useCallback(() => {
+    if (!textoOrigen.trim() || !textoDestino.trim()) return;
+    const precio = limpiarMonto(textoPrecioTramo);
+    if (precio <= 0) return;
+    void rutas.agregar({ origen: textoOrigen.trim(), destino: textoDestino.trim(), precio });
+    setTextoOrigen('');
+    setTextoDestino('');
+    setTextoPrecioTramo('');
+  }, [textoOrigen, textoDestino, textoPrecioTramo, rutas]);
 
   const sincronizar = useCallback(async () => {
     setSincronizando(true);
     try {
       await pedirSincronizacion();
-      await recargar();
+      await Promise.all([recargar(), libro.recargar(), rutas.recargar(), transacciones.recargar()]);
     } finally {
       setSincronizando(false);
     }
-  }, [recargar]);
+  }, [recargar, libro, rutas, transacciones]);
 
   const onRefresh = useCallback(() => {
     void sincronizar();
   }, [sincronizar]);
 
-  const segmentosDistribucion: SegmentoDonut[] = useMemo(() => {
-    if (!distribucion) return [];
-    return [
-      { etiqueta: 'Gastos fijos', valor: distribucion.totalGastosFijos, color: colors.labelTertiary },
+  /**
+   * La quincena en curso va desde el pago anterior (inclusive) hasta el
+   * próximo (exclusive). `previousPayday` acepta cualquier "ahora": pasarle
+   * el próximo pago devuelve exactamente el pago inmediatamente anterior.
+   */
+  const inicioQuincena = useMemo(() => previousPayday(payday.date).date, [payday]);
+
+  const ingresosExtraQuincena = useMemo(
+    () =>
+      libro.movimientos
+        .filter((m) => m.tipo === 'ingreso' && dentroDeVentana(m.fecha, inicioQuincena, payday.date))
+        .reduce((suma, m) => suma + m.monto, 0),
+    [libro.movimientos, inicioQuincena, payday],
+  );
+
+  const gastosLibroQuincena = useMemo(
+    () =>
+      libro.movimientos
+        .filter((m) => m.tipo === 'gasto' && dentroDeVentana(m.fecha, inicioQuincena, payday.date))
+        .reduce((suma, m) => suma + m.monto, 0),
+    [libro.movimientos, inicioQuincena, payday],
+  );
+
+  const gastosTransaccionesQuincena = useMemo(
+    () =>
+      transacciones.transacciones
+        .filter(
+          (t) => t.moneda === 'CRC' && dentroDeVentana(t.ocurridoEn, inicioQuincena, payday.date),
+        )
+        .reduce((suma, t) => suma + t.monto, 0),
+    [transacciones.transacciones, inicioQuincena, payday],
+  );
+
+  const gastosDiariosReales = gastosLibroQuincena + gastosTransaccionesQuincena;
+
+  const transporteProyectado = useMemo(
+    () => calcularCostoTransporteProyectado(rutas.costoDiarioTotal, inicioQuincena, payday.date),
+    [rutas.costoDiarioTotal, inicioQuincena, payday],
+  );
+
+  const otrosGastosFijos = gastosFijos.casa + gastosFijos.comida + gastosFijos.deudaBase;
+
+  const ingresoDisponible = useMemo(
+    () =>
+      calcularIngresoDisponible({
+        ingresosExtra: ingresosExtraQuincena,
+        transporteProyectado,
+        gastosDiariosReales,
+        otrosGastosFijos,
+      }),
+    [ingresosExtraQuincena, transporteProyectado, gastosDiariosReales, otrosGastosFijos],
+  );
+
+  const distribucion = useMemo(
+    () => distribuirQuincena({ colilla: ingresoDisponible, gastosFijos: GASTOS_FIJOS_YA_APLICADOS }),
+    [ingresoDisponible],
+  );
+
+  const segmentosDistribucion: SegmentoDonut[] = useMemo(
+    () => [
+      { etiqueta: 'Otros gastos fijos', valor: otrosGastosFijos, color: colors.labelTertiary },
+      { etiqueta: 'Transporte proyectado', valor: transporteProyectado, color: colors.orange },
+      { etiqueta: 'Gastos diarios reales', valor: gastosDiariosReales, color: colors.red },
       { etiqueta: 'Reserva de seguridad', valor: distribucion.reserva, color: colors.blue },
       { etiqueta: 'Abono a capital', valor: distribucion.abonoCapitalSugerido, color: colors.green },
-      { etiqueta: 'Falta para la reserva', valor: distribucion.faltante, color: colors.red },
-    ];
-  }, [distribucion]);
+    ],
+    [otrosGastosFijos, transporteProyectado, gastosDiariosReales, distribucion],
+  );
 
   return (
     <SafeAreaView style={styles.pantalla}>
@@ -143,59 +200,98 @@ export function ResumenScreen() {
 
       <ScrollView
         contentContainerStyle={styles.contenido}
-        refreshControl={
-          <RefreshControl refreshing={sincronizando} onRefresh={onRefresh} />
-        }
+        refreshControl={<RefreshControl refreshing={sincronizando} onRefresh={onRefresh} />}
       >
         <Card>
-          <Text style={styles.etiqueta}>
-            {payday.kind === 'quincena' ? 'Pago de quincena' : 'Pago de fin de mes'}
-          </Text>
-          <Text style={styles.monto}>
-            {distribucion ? formatearColones(distribucion.remanente) : '—'}
-          </Text>
+          <Text style={styles.etiqueta}>Ingreso disponible de esta quincena</Text>
+          <Text style={styles.monto}>{formatearColones(ingresoDisponible)}</Text>
           <Text style={styles.pie}>
-            {distribucion
-              ? 'Remanente después de gastos fijos'
-              : 'Ingresá la colilla para ver el remanente'}
+            170.000 + ingresos extra − transporte proyectado − gastos diarios reales − otros
+            gastos fijos
           </Text>
           {payday.movedFromWeekend ? (
             <View style={styles.aviso}>
               <Text style={styles.avisoTexto}>
-                El día {payday.nominalDay} cae en fin de semana: el pago se adelanta al
-                viernes.
+                El día {payday.nominalDay} cae en fin de semana: el pago se adelanta al viernes.
               </Text>
             </View>
           ) : null}
         </Card>
 
         <View style={styles.seccion}>
-          <SectionHeader titulo="Colilla" />
-          <Card>
-            {ventanaAbierta ? (
-              <View style={styles.formulario}>
-                <TextInput
-                  style={styles.input}
-                  value={texto}
-                  onChangeText={setTexto}
-                  keyboardType="number-pad"
-                  placeholder="Monto de la colilla"
-                  placeholderTextColor={colors.labelTertiary}
-                  accessibilityLabel="Monto de la colilla"
+          <SectionHeader titulo="Esta quincena" />
+          <Card sinRelleno>
+            <ListRow titulo="Ingresos extra" valor={formatearColones(ingresosExtraQuincena)} tono="positivo" />
+            <ListRow titulo="Gastos diarios (Libro Mayor)" valor={formatearColones(gastosLibroQuincena)} />
+            {gastosTransaccionesQuincena > 0 ? (
+              <ListRow
+                titulo="Transacciones bancarias detectadas"
+                valor={formatearColones(gastosTransaccionesQuincena)}
+              />
+            ) : null}
+            <ListRow
+              titulo="Transporte proyectado"
+              detalle={`${formatearColones(rutas.costoDiarioTotal)} por día`}
+              valor={formatearColones(transporteProyectado)}
+              ultima
+            />
+          </Card>
+          <Text style={styles.notaLibroMayor}>
+            Los ingresos y gastos diarios se anotan desde Deudas → Libro Mayor.
+          </Text>
+        </View>
+
+        <View style={styles.seccion}>
+          <SectionHeader titulo="Rutas de transporte" />
+          <Card sinRelleno={rutas.tramos.length > 0}>
+            {rutas.tramos.length > 0 ? (
+              rutas.tramos.map((t, i) => (
+                <ListRow
+                  key={t.id}
+                  titulo={`${t.origen} → ${t.destino}`}
+                  valor={formatearColones(t.precio)}
+                  onPress={() => void rutas.eliminar(t.id)}
+                  detalle="Tocar para quitar"
+                  ultima={i === rutas.tramos.length - 1}
                 />
-                <PrimaryButton titulo="Calcular distribución" onPress={aplicarColilla} />
-              </View>
+              ))
             ) : (
-              <Text style={styles.bloqueado}>
-                El ingreso se habilita 48 horas antes del pago, el {fechaLegible(abreEl)}.
+              <Text style={styles.mensajeVacio}>
+                Todavía no hay tramos. Agregá cada parte del recorrido diario (ej. Casa → San
+                José) y su precio.
               </Text>
             )}
           </Card>
+          <View style={styles.formularioTramo}>
+            <TextInput
+              style={styles.inputGasto}
+              value={textoOrigen}
+              onChangeText={setTextoOrigen}
+              placeholder="Origen"
+              placeholderTextColor={colors.labelTertiary}
+            />
+            <TextInput
+              style={styles.inputGasto}
+              value={textoDestino}
+              onChangeText={setTextoDestino}
+              placeholder="Destino"
+              placeholderTextColor={colors.labelTertiary}
+            />
+            <TextInput
+              style={styles.inputGasto}
+              value={textoPrecioTramo}
+              onChangeText={setTextoPrecioTramo}
+              keyboardType="number-pad"
+              placeholder="Precio del tramo"
+              placeholderTextColor={colors.labelTertiary}
+            />
+            <PrimaryButton titulo="Agregar tramo" onPress={agregarTramo} />
+          </View>
         </View>
 
         <View style={styles.seccion}>
           <SectionHeader
-            titulo="Gastos fijos"
+            titulo="Otros gastos fijos"
             accion={editandoGastos ? undefined : 'Editar'}
             onAccionPress={empezarEdicionGastos}
           />
@@ -218,38 +314,6 @@ export function ResumenScreen() {
                   keyboardType="number-pad"
                   placeholderTextColor={colors.labelTertiary}
                 />
-                <Text style={styles.etiquetaCampo}>Pases</Text>
-                <TextInput
-                  style={styles.inputGasto}
-                  value={textoPases}
-                  onChangeText={setTextoPases}
-                  keyboardType="number-pad"
-                  placeholderTextColor={colors.labelTertiary}
-                />
-                <View style={styles.calculadoraPases}>
-                  <Text style={styles.etiquetaCampo}>
-                    ¿No sabés cuánto poner? Calculalo por cantidad de pases al día:
-                  </Text>
-                  <View style={styles.filaCalculadora}>
-                    <TextInput
-                      style={[styles.inputGasto, styles.inputCalculadora]}
-                      value={textoCantidadPases}
-                      onChangeText={setTextoCantidadPases}
-                      keyboardType="number-pad"
-                      placeholder="Pases/día"
-                      placeholderTextColor={colors.labelTertiary}
-                    />
-                    <TextInput
-                      style={[styles.inputGasto, styles.inputCalculadora]}
-                      value={textoCostoPorPase}
-                      onChangeText={setTextoCostoPorPase}
-                      keyboardType="number-pad"
-                      placeholder="Costo por pase"
-                      placeholderTextColor={colors.labelTertiary}
-                    />
-                  </View>
-                  <PrimaryButton titulo="Calcular pases de la quincena" onPress={calcularPases} />
-                </View>
                 <Text style={styles.etiquetaCampo}>Deuda base</Text>
                 <TextInput
                   style={styles.inputGasto}
@@ -262,19 +326,10 @@ export function ResumenScreen() {
               </View>
             ) : (
               <>
-                <ListRow
-                  titulo="Casa"
-                  valor={formatearColones(gastosFijos.casa)}
-                  onPress={empezarEdicionGastos}
-                />
+                <ListRow titulo="Casa" valor={formatearColones(gastosFijos.casa)} onPress={empezarEdicionGastos} />
                 <ListRow
                   titulo="Comida"
                   valor={formatearColones(gastosFijos.comida)}
-                  onPress={empezarEdicionGastos}
-                />
-                <ListRow
-                  titulo="Pases"
-                  valor={formatearColones(gastosFijos.pases)}
                   onPress={empezarEdicionGastos}
                 />
                 <ListRow
@@ -288,45 +343,35 @@ export function ResumenScreen() {
           </Card>
         </View>
 
-        {distribucion ? (
-          <View style={styles.seccion}>
-            <SectionHeader titulo="Distribución" />
-            <Card style={styles.tarjetaDonut}>
-              <DistribucionDonut segmentos={segmentosDistribucion} />
-            </Card>
-            <Card sinRelleno>
-              <ListRow
-                titulo="Total gastos fijos"
-                valor={formatearColones(distribucion.totalGastosFijos)}
-              />
-              <ListRow
-                titulo="Reserva de seguridad"
-                detalle={`Banda ${formatearColones(distribucion.banda.min)} – ${formatearColones(distribucion.banda.max)}`}
-                valor={formatearColones(distribucion.reserva)}
-              />
-              <ListRow
-                titulo="Abono a capital"
-                detalle={
-                  distribucion.estado === 'holgado'
-                    ? `Rango ${formatearColones(distribucion.abonoCapitalRango.min)} – ${formatearColones(distribucion.abonoCapitalRango.max)}`
-                    : undefined
-                }
-                valor={formatearColones(distribucion.abonoCapitalSugerido)}
-                tono="positivo"
-              />
-              <ListRow
-                titulo={ETIQUETAS_ESTADO[distribucion.estado].texto}
-                valor={
-                  distribucion.faltante > 0
-                    ? `Faltan ${formatearColones(distribucion.faltante)}`
-                    : undefined
-                }
-                tono={ETIQUETAS_ESTADO[distribucion.estado].tono}
-                ultima
-              />
-            </Card>
-          </View>
-        ) : null}
+        <View style={styles.seccion}>
+          <SectionHeader titulo="Distribución" />
+          <Card style={styles.tarjetaDonut}>
+            <DistribucionDonut segmentos={segmentosDistribucion} />
+          </Card>
+          <Card sinRelleno>
+            <ListRow
+              titulo="Reserva de seguridad"
+              detalle={`Banda ${formatearColones(distribucion.banda.min)} – ${formatearColones(distribucion.banda.max)}`}
+              valor={formatearColones(distribucion.reserva)}
+            />
+            <ListRow
+              titulo="Abono a capital"
+              detalle={
+                distribucion.estado === 'holgado'
+                  ? `Rango ${formatearColones(distribucion.abonoCapitalRango.min)} – ${formatearColones(distribucion.abonoCapitalRango.max)}`
+                  : undefined
+              }
+              valor={formatearColones(distribucion.abonoCapitalSugerido)}
+              tono="positivo"
+            />
+            <ListRow
+              titulo={ETIQUETAS_ESTADO[distribucion.estado].texto}
+              valor={distribucion.faltante > 0 ? `Faltan ${formatearColones(distribucion.faltante)}` : undefined}
+              tono={ETIQUETAS_ESTADO[distribucion.estado].tono}
+              ultima
+            />
+          </Card>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -347,25 +392,15 @@ const styles = StyleSheet.create({
   },
   avisoTexto: { ...typography.footnote, color: colors.label },
   formulario: { gap: spacing.lg },
-  input: {
-    ...typography.title3,
-    backgroundColor: colors.fill,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    color: colors.label,
+  formularioTramo: { gap: spacing.sm, marginTop: spacing.sm },
+  notaLibroMayor: {
+    ...typography.footnote,
+    color: colors.labelSecondary,
+    marginTop: spacing.sm,
   },
-  bloqueado: { ...typography.subheadline, color: colors.labelSecondary },
   tarjetaDonut: { marginBottom: spacing.md },
   etiquetaCampo: { ...typography.footnote, color: colors.labelSecondary },
-  calculadoraPases: {
-    gap: spacing.sm,
-    backgroundColor: colors.fill,
-    borderRadius: radius.md,
-    padding: spacing.md,
-  },
-  filaCalculadora: { flexDirection: 'row', gap: spacing.sm },
-  inputCalculadora: { flex: 1, backgroundColor: colors.surface },
+  mensajeVacio: { ...typography.subheadline, color: colors.labelSecondary, padding: spacing.lg },
   inputGasto: {
     ...typography.body,
     backgroundColor: colors.fill,

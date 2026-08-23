@@ -8,10 +8,19 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { BlurHeader, Card, ListRow, OpportunityAlertToast, PrimaryButton, SectionHeader } from '../components';
+import {
+  BlurHeader,
+  Card,
+  GmailSyncCard,
+  ListRow,
+  OpportunityAlertToast,
+  PrimaryButton,
+  SectionHeader,
+} from '../components';
 import { calcularCostoOportunidad, type CostoOportunidad } from '../core/analytics/opportunityCost';
 import { priorizarAbonoExtra, proyectarConGamificacion } from '../core/debt/crusher';
 import { formatearColones } from '../core/payroll/distribution';
+import { googleAuthConfigurado } from '../lib/googleAuth';
 import { type Deuda, useDeudas } from '../state/useDeudas';
 import { type MovimientoLibro, useLibroMayor } from '../state/useLibroMayor';
 import { colors, radius, spacing, typography } from '../theme';
@@ -49,7 +58,7 @@ const FilaMovimiento = memo(function FilaMovimiento({
   return (
     <ListRow
       titulo={movimiento.descripcion || (movimiento.tipo === 'gasto' ? 'Gasto' : 'Ingreso')}
-      detalle={movimiento.fecha}
+      detalle={movimiento.categoria ? `${movimiento.categoria} · ${movimiento.fecha}` : movimiento.fecha}
       valor={formatearColones(movimiento.monto)}
       tono={movimiento.tipo === 'gasto' ? 'negativo' : 'positivo'}
       ultima={ultima}
@@ -63,6 +72,7 @@ export function DeudasScreen() {
 
   const [textoMontoLibro, setTextoMontoLibro] = useState('');
   const [descripcionLibro, setDescripcionLibro] = useState('');
+  const [categoriaLibro, setCategoriaLibro] = useState('');
   const [tipoLibro, setTipoLibro] = useState<'gasto' | 'ingreso'>('gasto');
 
   const [deudaSeleccionadaId, setDeudaSeleccionadaId] = useState<string | null>(null);
@@ -73,7 +83,12 @@ export function DeudasScreen() {
   const agregarMovimiento = useCallback(() => {
     const monto = limpiarMonto(textoMontoLibro);
     if (monto <= 0) return;
-    void libro.agregar({ tipo: tipoLibro, monto, descripcion: descripcionLibro });
+    void libro.agregar({
+      tipo: tipoLibro,
+      monto,
+      descripcion: descripcionLibro,
+      categoria: categoriaLibro.trim() || null,
+    });
     // El costo de oportunidad solo aplica a gastos: un ingreso no compite con
     // la deuda por el mismo colón.
     setAlertaCosto(
@@ -81,7 +96,8 @@ export function DeudasScreen() {
     );
     setTextoMontoLibro('');
     setDescripcionLibro('');
-  }, [textoMontoLibro, descripcionLibro, tipoLibro, libro, deudasHook.deudas]);
+    setCategoriaLibro('');
+  }, [textoMontoLibro, descripcionLibro, categoriaLibro, tipoLibro, libro, deudasHook.deudas]);
 
   const deudaSeleccionada: Deuda | null = useMemo(
     () => deudasHook.deudas.find((d) => d.id === deudaSeleccionadaId) ?? deudasHook.deudas[0] ?? null,
@@ -124,6 +140,12 @@ export function DeudasScreen() {
         contentContainerStyle={styles.contenido}
         refreshControl={<RefreshControl refreshing={refrescando} onRefresh={recargarTodo} />}
       >
+        {googleAuthConfigurado ? (
+          <View style={styles.seccion}>
+            <GmailSyncCard />
+          </View>
+        ) : null}
+
         <View style={styles.seccion}>
           <SectionHeader titulo="Libro Mayor" />
           <Card>
@@ -148,6 +170,17 @@ export function DeudasScreen() {
                 onChangeText={setTextoMontoLibro}
                 keyboardType="number-pad"
                 placeholder="Monto"
+                placeholderTextColor={colors.labelTertiary}
+              />
+              <TextInput
+                style={styles.input}
+                value={categoriaLibro}
+                onChangeText={setCategoriaLibro}
+                placeholder={
+                  tipoLibro === 'ingreso'
+                    ? 'Categoría (ej. Ventas, Reparaciones de hardware)'
+                    : 'Categoría (opcional)'
+                }
                 placeholderTextColor={colors.labelTertiary}
               />
               <TextInput

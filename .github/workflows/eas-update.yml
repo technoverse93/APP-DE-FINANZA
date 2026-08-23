@@ -30,6 +30,7 @@ jobs:
       # esos valores con un bundle sin configurar.
       EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
       EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+      EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID }}
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
     steps:

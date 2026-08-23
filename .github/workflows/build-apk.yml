@@ -32,6 +32,10 @@ jobs:
       # Supabase quedan inactivas hasta que se configuren los secretos reales.
       EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
       EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+      # Opcional: si no está configurado, la tarjeta de Gmail se oculta sola
+      # (ver googleAuthConfigurado en src/lib/googleAuth.ts) y el resto de la
+      # app sigue funcionando igual.
+      EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID }}
 
     steps:
       - name: Descargar el repositorio
@@ -61,6 +65,20 @@ jobs:
         run: |
           npm run typecheck
           npm test
+
+      # Sin esto, cada corrida de CI firma el APK con un keystore de debug
+      # generado desde cero (Gradle lo crea solo si no existe), así que la
+      # huella SHA-1 cambia en cada build. Eso rompe dos cosas: instalar una
+      # actualización sobre el APK anterior (Android exige la misma firma) y
+      # cualquier OAuth nativo de Android con Google, que valida contra una
+      # huella fija. Si el secreto todavía no está configurado, se salta y
+      # Gradle sigue generando uno nuevo cada vez, como hacía antes.
+      - name: Restaurar el keystore de depuración fijo (si está configurado)
+        run: |
+          if [ -n "${{ secrets.ANDROID_DEBUG_KEYSTORE_BASE64 }}" ]; then
+            mkdir -p ~/.android
+            echo "${{ secrets.ANDROID_DEBUG_KEYSTORE_BASE64 }}" | base64 -d > ~/.android/debug.keystore
+          fi
 
       # Genera /android a partir de app.json y los plugins de Expo. Es el paso
       # que reemplaza al "eas build" en la nube: corre localmente en el runner.

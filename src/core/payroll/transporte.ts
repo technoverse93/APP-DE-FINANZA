@@ -1,8 +1,12 @@
 /**
  * Costo de transporte proyectado para un rango de fechas (una quincena).
  *
- * Fórmula: (cantidad de pases diarios × costo por pase) × días hábiles del
- * rango. "Días hábiles" acá excluye únicamente el domingo — a diferencia del
+ * El costo diario no es un número fijo: es la suma de los tramos de la ruta
+ * del día (Casa -> San José -> Coronado -> ...), que se arma en
+ * `rutas_transporte` y se agrega con `useRutasTransporte`. Este módulo solo
+ * multiplica ese total diario por los días hábiles del rango.
+ *
+ * "Días hábiles" acá excluye únicamente el domingo — a diferencia del
  * calendario de pago (`adjustForWeekend`), que también salta el sábado —
  * porque el usuario sí se transporta los sábados, solo no cobra ni recibe
  * la quincena ese día.
@@ -37,18 +41,17 @@ export function diasHabilesTransporte(desde: Date, hasta: Date): number {
 }
 
 /**
- * Proyecta el costo total de transporte del rango [desde, hasta), asumiendo
- * la misma cantidad de pases todos los días hábiles (domingo excluido).
+ * Proyecta el costo total de transporte del rango [desde, hasta): el costo
+ * diario (suma de los tramos de la ruta) multiplicado por los días hábiles
+ * (domingo excluido).
  */
-export function calcularCostoPasesProyectado(
-  cantidadPasesDiarios: number,
-  costoPorPase: number,
+export function calcularCostoTransporteProyectado(
+  costoDiarioTotal: number,
   desde: Date,
   hasta: Date,
 ): number {
-  assertNoNegativo(cantidadPasesDiarios, 'La cantidad de pases diarios');
-  assertNoNegativo(costoPorPase, 'El costo por pase');
+  assertNoNegativo(costoDiarioTotal, 'El costo diario de transporte');
 
   const dias = diasHabilesTransporte(desde, hasta);
-  return Math.round(cantidadPasesDiarios * costoPorPase * dias);
+  return Math.round(costoDiarioTotal * dias);
 }

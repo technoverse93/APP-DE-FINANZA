@@ -68,10 +68,14 @@ export interface DistribuirInput {
 
 const CAMPOS_FIJOS: readonly (keyof GastosFijos)[] = ['casa', 'comida', 'pases', 'deudaBase'];
 
-function assertMontoValido(valor: number, nombre: string): void {
+function assertFinito(valor: number, nombre: string): void {
   if (typeof valor !== 'number' || !Number.isFinite(valor)) {
     throw new TypeError(`${nombre} debe ser un número finito`);
   }
+}
+
+function assertMontoValido(valor: number, nombre: string): void {
+  assertFinito(valor, nombre);
   if (valor < 0) {
     throw new RangeError(`${nombre} no puede ser negativo`);
   }
@@ -97,7 +101,12 @@ export function distribuirQuincena({
   gastosFijos,
   banda = DEFAULT_SAFETY_BAND,
 }: DistribuirInput): DistribucionQuincenal {
-  assertMontoValido(colilla, 'La colilla');
+  // A diferencia de los gastos fijos y la banda, la colilla sí puede llegar
+  // negativa: cuando la alimenta el ingreso disponible calculado (ver
+  // core/payroll/ingresoDisponible.ts), un valor negativo significa que los
+  // gastos ya superaron el ingreso antes de tocar la banda de seguridad —
+  // información real que el estado "deficit" ya sabe mostrar, no un error.
+  assertFinito(colilla, 'La colilla');
   for (const campo of CAMPOS_FIJOS) {
     assertMontoValido(gastosFijos[campo], `El gasto fijo "${campo}"`);
   }
