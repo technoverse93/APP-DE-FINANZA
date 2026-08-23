@@ -8,7 +8,15 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { BlurHeader, Card, ListRow, OpportunityAlertToast, PrimaryButton, SectionHeader } from '../components';
+import {
+  BlurHeader,
+  Card,
+  GmailSyncCard,
+  ListRow,
+  OpportunityAlertToast,
+  PrimaryButton,
+  SectionHeader,
+} from '../components';
 import { calcularCostoOportunidad, type CostoOportunidad } from '../core/analytics/opportunityCost';
 import { priorizarAbonoExtra, proyectarConGamificacion } from '../core/debt/crusher';
 import { formatearColones } from '../core/payroll/distribution';
@@ -131,6 +139,10 @@ export function DeudasScreen() {
         contentContainerStyle={styles.contenido}
         refreshControl={<RefreshControl refreshing={refrescando} onRefresh={recargarTodo} />}
       >
+        <View style={styles.seccion}>
+          <GmailSyncCard />
+        </View>
+
         <View style={styles.seccion}>
           <SectionHeader titulo="Libro Mayor" />
           <Card>
