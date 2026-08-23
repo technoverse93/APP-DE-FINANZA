@@ -3,6 +3,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   RefreshControl,
+  Switch,
   ScrollView,
   StyleSheet,
   Text,
@@ -88,6 +89,11 @@ export function ResumenScreen() {
   const [textoOrigen, setTextoOrigen] = useState('');
   const [textoDestino, setTextoDestino] = useState('');
   const [textoPrecioTramo, setTextoPrecioTramo] = useState('');
+  const [textoUsosTramo, setTextoUsosTramo] = useState('1');
+  // Un pase ocasional (ej. dos pases extra para una salida) no es parte de la
+  // ruta recurrente: se anota como gasto variable del día y no vuelve a
+  // pesar en las quincenas siguientes.
+  const [esOcasional, setEsOcasional] = useState(false);
 
   const empezarEdicionGastos = useCallback(() => {
     setTextoCasa(String(gastosFijos.casa));
@@ -111,14 +117,36 @@ export function ResumenScreen() {
   }, [textoCasa, textoComida, textoDeudaBase, guardarGastosFijos]);
 
   const agregarTramo = useCallback(() => {
-    if (!textoOrigen.trim() || !textoDestino.trim()) return;
     const precio = limpiarMonto(textoPrecioTramo);
     if (precio <= 0) return;
-    void rutas.agregar({ origen: textoOrigen.trim(), destino: textoDestino.trim(), precio });
+    const usos = Math.max(1, limpiarMonto(textoUsosTramo) || 1);
+
+    if (esOcasional) {
+      // No toca rutas_transporte: entra al Libro Mayor como gasto del día,
+      // así descuenta del disponible ahora y no se repite en las próximas
+      // quincenas.
+      const etiqueta = [textoOrigen.trim(), textoDestino.trim()].filter(Boolean).join(' → ');
+      void libro.agregar({
+        tipo: 'gasto',
+        monto: precio * usos,
+        descripcion: etiqueta ? `Pase ocasional: ${etiqueta}` : 'Pase ocasional',
+        categoria: 'Transporte ocasional',
+      });
+    } else {
+      if (!textoOrigen.trim() || !textoDestino.trim()) return;
+      void rutas.agregar({
+        origen: textoOrigen.trim(),
+        destino: textoDestino.trim(),
+        precio,
+        usosPorDia: usos,
+      });
+    }
+
     setTextoOrigen('');
     setTextoDestino('');
     setTextoPrecioTramo('');
-  }, [textoOrigen, textoDestino, textoPrecioTramo, rutas]);
+    setTextoUsosTramo('1');
+  }, [textoOrigen, textoDestino, textoPrecioTramo, textoUsosTramo, esOcasional, rutas, libro]);
 
   const sincronizar = useCallback(async () => {
     setSincronizando(true);
@@ -311,9 +339,9 @@ export function ResumenScreen() {
                 <ListRow
                   key={t.id}
                   titulo={`${t.origen} → ${t.destino}`}
-                  valor={formatearColones(t.precio)}
+                  valor={formatearColones(t.precio * t.usosPorDia)}
                   onPress={() => void rutas.eliminar(t.id)}
-                  detalle="Tocar para quitar"
+                  detalle={`${formatearColones(t.precio)} × ${t.usosPorDia}/día · tocar para quitar`}
                   ultima={i === rutas.tramos.length - 1}
                 />
               ))
@@ -339,15 +367,43 @@ export function ResumenScreen() {
               placeholder="Destino"
               placeholderTextColor={colors.labelTertiary}
             />
-            <TextInput
-              style={styles.inputGasto}
-              value={textoPrecioTramo}
-              onChangeText={setTextoPrecioTramo}
-              keyboardType="number-pad"
-              placeholder="Precio del tramo"
-              placeholderTextColor={colors.labelTertiary}
+            <View style={styles.filaCampos}>
+              <TextInput
+                style={[styles.inputGasto, styles.campoFlexible]}
+                value={textoPrecioTramo}
+                onChangeText={setTextoPrecioTramo}
+                keyboardType="number-pad"
+                placeholder="Precio por pase"
+                placeholderTextColor={colors.labelTertiary}
+              />
+              <TextInput
+                style={[styles.inputGasto, styles.campoAngosto]}
+                value={textoUsosTramo}
+                onChangeText={setTextoUsosTramo}
+                keyboardType="number-pad"
+                placeholder="Usos/día"
+                placeholderTextColor={colors.labelTertiary}
+              />
+            </View>
+            <View style={styles.filaSwitch}>
+              <View style={styles.textoSwitch}>
+                <Text style={styles.etiquetaCampo}>Gasto ocasional (no permanente)</Text>
+                <Text style={styles.ayudaSwitch}>
+                  {esOcasional
+                    ? 'Se anota como gasto del día y no se repite en las próximas quincenas.'
+                    : 'Se guarda como tramo fijo y cuenta en todas las quincenas.'}
+                </Text>
+              </View>
+              <Switch
+                value={esOcasional}
+                onValueChange={setEsOcasional}
+                trackColor={{ true: colors.brandGold, false: colors.fill }}
+              />
+            </View>
+            <PrimaryButton
+              titulo={esOcasional ? 'Anotar gasto ocasional' : 'Agregar tramo fijo'}
+              onPress={agregarTramo}
             />
-            <PrimaryButton titulo="Agregar tramo" onPress={agregarTramo} />
           </View>
         </View>
 
@@ -458,6 +514,17 @@ const styles = StyleSheet.create({
   formulario: { gap: spacing.lg },
   formularioTramo: { gap: spacing.sm, marginTop: spacing.sm },
   formularioColilla: { gap: spacing.md, marginTop: spacing.md },
+  filaCampos: { flexDirection: 'row', gap: spacing.sm },
+  campoFlexible: { flex: 2 },
+  campoAngosto: { flex: 1 },
+  filaSwitch: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.xs,
+  },
+  textoSwitch: { flex: 1 },
+  ayudaSwitch: { ...typography.caption2, color: colors.labelTertiary, marginTop: 2 },
   notaLibroMayor: {
     ...typography.footnote,
     color: colors.labelSecondary,
