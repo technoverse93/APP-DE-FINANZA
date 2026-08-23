@@ -1,3 +1,4 @@
+import { Prompt } from 'expo-auth-session';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
 
@@ -40,5 +41,12 @@ export function useGoogleGmailAuth() {
     // código por un token, y el acceso es de un solo uso por sincronización
     // manual (no se persiste un refresh token en ningún lado).
     responseType: 'token',
+    // Sin esto, Google reutiliza en silencio la cuenta que ya esté activa en
+    // el navegador del teléfono (típicamente la principal, no la agregada
+    // como "usuario de prueba" en la pantalla de consentimiento) y rechaza
+    // el login con "Error 400: invalid_request" sin dar oportunidad de
+    // elegir otra. Forzar el selector deja que el usuario elija la cuenta
+    // correcta cada vez.
+    prompt: Prompt.SelectAccount,
   });
 }
