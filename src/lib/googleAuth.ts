@@ -37,16 +37,21 @@ export function useGoogleGmailAuth() {
   return Google.useAuthRequest({
     androidClientId: ANDROID_CLIENT_ID,
     scopes: [GMAIL_READONLY_SCOPE],
-    // Token en vez de Authorization Code: no hay backend que intercambie el
-    // código por un token, y el acceso es de un solo uso por sincronización
-    // manual (no se persiste un refresh token en ningún lado).
-    responseType: 'token',
-    // Sin esto, Google reutiliza en silencio la cuenta que ya esté activa en
-    // el navegador del teléfono (típicamente la principal, no la agregada
-    // como "usuario de prueba" en la pantalla de consentimiento) y rechaza
-    // el login con "Error 400: invalid_request" sin dar oportunidad de
-    // elegir otra. Forzar el selector deja que el usuario elija la cuenta
-    // correcta cada vez.
+    // Deliberadamente NO se fija responseType. El valor por defecto para una
+    // app instalada es el flujo de código de autorización con PKCE, y ese es
+    // el único que Google acepta para un cliente de tipo Android: el flujo
+    // implícito (responseType: 'token') está prohibido para apps nativas
+    // (RFC 8252), y pedirlo es lo que devolvía "Error 400: invalid_request".
+    //
+    // No hace falta backend para completarlo: el propio provider intercambia
+    // el código por el token usando el code_verifier de PKCE y deja el
+    // accessToken en `response.authentication`, igual que antes.
+    // Sin esto, Google reutiliza en silencio la cuenta ya activa en el
+    // navegador del teléfono — típicamente la principal, no la que está
+    // agregada como "usuario de prueba" en la pantalla de consentimiento —
+    // y no da forma de cambiarla. Con la app en modo "Testing", entrar con
+    // una cuenta que no es de prueba es rechazado, así que el selector es
+    // necesario para poder elegir la correcta.
     prompt: Prompt.SelectAccount,
   });
 }
