@@ -31,7 +31,8 @@
           "faceIDPermission": "Se usa tu biometría para desbloquear la aplicación."
         }
       ],
-      "expo-updates"
+      "expo-updates",
+      "expo-notifications"
     ],
     "runtimeVersion": {
       "policy": "appVersion"

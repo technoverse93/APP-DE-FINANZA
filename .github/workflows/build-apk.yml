@@ -10,6 +10,7 @@ on:
   pull_request:
     branches:
       - main
+  workflow_dispatch:
 
 # Cancela la corrida anterior de la misma rama si llega un push nuevo antes de
 # que termine, para no gastar minutos de CI en un commit ya superado.

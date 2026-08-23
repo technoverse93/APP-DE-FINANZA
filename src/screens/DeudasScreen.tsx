@@ -1,13 +1,16 @@
 import { memo, useCallback, useMemo, useState } from 'react';
 import {
+  KeyboardAvoidingView,
+  Platform,
   RefreshControl,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
+// De safe-area-context, NO de react-native (ese es exclusivo de iOS).
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   BlurHeader,
   Card,
@@ -134,12 +137,17 @@ export function DeudasScreen() {
   }, [libro, deudasHook]);
 
   return (
-    <SafeAreaView style={styles.pantalla}>
+    <SafeAreaView style={styles.pantalla} edges={['top', 'left', 'right']}>
       <BlurHeader titulo="Deudas" subtitulo="Libro Mayor y Trituradora de Deudas" />
-      <ScrollView
-        contentContainerStyle={styles.contenido}
-        refreshControl={<RefreshControl refreshing={refrescando} onRefresh={recargarTodo} />}
+      <KeyboardAvoidingView
+        style={styles.flexible}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
+        <ScrollView
+          contentContainerStyle={styles.contenido}
+          keyboardShouldPersistTaps="handled"
+          refreshControl={<RefreshControl refreshing={refrescando} onRefresh={recargarTodo} />}
+        >
         {googleAuthConfigurado ? (
           <View style={styles.seccion}>
             <GmailSyncCard />
@@ -318,13 +326,15 @@ export function DeudasScreen() {
             </Card>
           </View>
         ) : null}
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   pantalla: { flex: 1, backgroundColor: colors.background },
+  flexible: { flex: 1 },
   contenido: { padding: spacing.lg, gap: spacing.xl, paddingBottom: spacing.xxxl },
   seccion: { gap: 0 },
   avisoCostoOportunidad: { marginTop: spacing.md },
