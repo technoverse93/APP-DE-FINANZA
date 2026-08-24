@@ -12,6 +12,7 @@ import {
 // De safe-area-context, NO de react-native (ese es exclusivo de iOS).
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
+  AvisoError,
   BlurHeader,
   Card,
   GmailSyncCard,
@@ -148,6 +149,8 @@ export function DeudasScreen() {
           keyboardShouldPersistTaps="handled"
           refreshControl={<RefreshControl refreshing={refrescando} onRefresh={recargarTodo} />}
         >
+        <AvisoError errores={[libro.error, deudasHook.error]} />
+
         {googleAuthConfigurado ? (
           <View style={styles.seccion}>
             <GmailSyncCard />

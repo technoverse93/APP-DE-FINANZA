@@ -5,6 +5,7 @@ export { SectionHeader } from './SectionHeader';
 export { BlurHeader } from './BlurHeader';
 export { ErrorBoundary } from './ErrorBoundary';
 export { ConfigWarning } from './ConfigWarning';
+export { AvisoError } from './AvisoError';
 export { DistribucionDonut, type SegmentoDonut } from './DistribucionDonut';
 export { OpportunityAlertToast } from './OpportunityAlertToast';
 export { GmailSyncCard } from './GmailSyncCard';
