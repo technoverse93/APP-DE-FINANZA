@@ -163,9 +163,21 @@ describe('proyectarPorPorcentajeRemanente', () => {
     expect(proyectarPorPorcentajeRemanente(1_000_000, 0.02, -20_000, 50, new Date())).toBeNull();
   });
 
-  it('con porcentaje cero o negativo, no hay proyección que mostrar', () => {
+  it('con porcentaje cero y sin cuota fija, no hay proyección que mostrar', () => {
     expect(proyectarPorPorcentajeRemanente(1_000_000, 0.02, 100_000, 0, new Date())).toBeNull();
     expect(proyectarPorPorcentajeRemanente(1_000_000, 0.02, 100_000, -10, new Date())).toBeNull();
+  });
+
+  it('con cuota fija, el plan existe aunque el porcentaje sea cero', () => {
+    // Un alquiler con cuota pactada sigue teniendo plan de pago aunque esta
+    // quincena no se destine nada extra del remanente.
+    const p = proyectarPorPorcentajeRemanente(1_000_000, 0.02, 100_000, 0, new Date(), 30_000);
+    expect(p?.abonoPorPeriodo).toBe(30_000);
+  });
+
+  it('con cuota fija, el porcentaje se suma sobre la cuota, no la reemplaza', () => {
+    const p = proyectarPorPorcentajeRemanente(1_000_000, 0.02, 100_000, 50, new Date(), 30_000);
+    expect(p?.abonoPorPeriodo).toBe(80_000); // 30.000 de cuota + 50.000 de remanente
   });
 
   it('trae la fecha real de saldo cero cuando el abono alcanza a saldar', () => {

@@ -38,6 +38,13 @@ export interface GastoFijoItem {
   readonly diaNominal?: 13 | 28;
   /** Solo para `diferido`: la única fecha de pago en que aplica (YYYY-MM-DD). */
   readonly fechaDiferida?: string;
+  /**
+   * Última quincena en que este gasto aplica (YYYY-MM-DD, inclusive).
+   * Sin vencimiento por defecto. Es lo que permite que la cuota de una deuda
+   * con plazo (ver `core/debt/crusher.ts`) deje de pesar en el presupuesto en
+   * cuanto el plan termina, sin tener que borrarla a mano.
+   */
+  readonly venceEn?: string;
   readonly activo: boolean;
 }
 
@@ -59,6 +66,7 @@ export function fechaPagoIso(payday: Payday): string {
  */
 export function montoEnQuincena(gasto: GastoFijoItem, payday: Payday): number {
   if (!gasto.activo || gasto.montoMensual <= 0) return 0;
+  if (gasto.venceEn !== undefined && fechaPagoIso(payday) > gasto.venceEn) return 0;
 
   switch (gasto.modo) {
     case 'mitades': {

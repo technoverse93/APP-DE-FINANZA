@@ -43,7 +43,7 @@ function dentroDeVentana(fechaIso: string, inicio: Date, fin: Date): boolean {
  * — dos "verdades" del mismo remanente que no coinciden.
  */
 export function useDistribucionQuincena() {
-  const { payday, gastosFijos, error, guardarGastosFijos, recargar } = useQuincena();
+  const { payday } = useQuincena();
   const libro = useLibroMayor();
   const rutas = useRutasTransporte();
   const transacciones = useTransacciones();
@@ -56,11 +56,16 @@ export function useDistribucionQuincena() {
     setSincronizando(true);
     try {
       await pedirSincronizacion();
-      await Promise.all([recargar(), libro.recargar(), rutas.recargar(), transacciones.recargar()]);
+      await Promise.all([
+        gastosFijosItems.recargar(),
+        libro.recargar(),
+        rutas.recargar(),
+        transacciones.recargar(),
+      ]);
     } finally {
       setSincronizando(false);
     }
-  }, [recargar, libro, rutas, transacciones]);
+  }, [gastosFijosItems, libro, rutas, transacciones]);
 
   /**
    * La quincena en curso va desde el pago anterior (inclusive) hasta el
@@ -102,20 +107,12 @@ export function useDistribucionQuincena() {
     [rutas.costoDiarioTotal, inicioQuincena, payday],
   );
 
-  /**
-   * Los gastos fijos con regla de reparto son la fuente nueva; los campos
-   * casa/comida/deudaBase de la tabla vieja se siguen sumando porque tienen
-   * datos reales ya cargados y aplican por igual a cada quincena. Las dos
-   * fuentes conviven en vez de que una pise a la otra: descartar la vieja
-   * borraría de la pantalla montos que el usuario sí está pagando.
-   */
   const gastosFijosRepartidos = useMemo(
     () => totalEnQuincena(gastosFijosItems.gastos, payday),
     [gastosFijosItems.gastos, payday],
   );
 
-  const otrosGastosFijos =
-    gastosFijos.casa + gastosFijos.comida + gastosFijos.deudaBase + gastosFijosRepartidos;
+  const otrosGastosFijos = gastosFijosRepartidos;
 
   const ingresoDisponible = useMemo(
     () =>
@@ -176,10 +173,6 @@ export function useDistribucionQuincena() {
 
   return {
     payday,
-    gastosFijos,
-    error,
-    guardarGastosFijos,
-    recargar,
     libro,
     rutas,
     transacciones,

@@ -114,3 +114,22 @@ describe('proyectarPorQuincena', () => {
     expect(() => proyectarPorQuincena([], 2027, 2026)).toThrow(RangeError);
   });
 });
+
+describe('venceEn', () => {
+  it('sin vencimiento, aplica siempre', () => {
+    const g = gasto({});
+    expect(montoEnQuincena(g, Q13)).toBeGreaterThan(0);
+    expect(montoEnQuincena(g, Q28)).toBeGreaterThan(0);
+  });
+
+  it('deja de aplicar en la primera quincena posterior al vencimiento', () => {
+    const g = gasto({ venceEn: fechaPagoIso(Q13) });
+    expect(montoEnQuincena(g, Q13)).toBeGreaterThan(0);
+    expect(montoEnQuincena(g, Q28)).toBe(0);
+  });
+
+  it('la quincena del propio vencimiento todavía cuenta (inclusive)', () => {
+    const g = gasto({ modo: 'quincena_fija', diaNominal: 28, venceEn: fechaPagoIso(Q28) });
+    expect(montoEnQuincena(g, Q28)).toBeGreaterThan(0);
+  });
+});

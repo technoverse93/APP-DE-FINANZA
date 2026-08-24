@@ -8,6 +8,10 @@ export interface EntradaGastoFijo {
   readonly modo: ModoReparto;
   readonly diaNominal?: 13 | 28;
   readonly fechaDiferida?: string;
+  /** Última quincena en que aplica (YYYY-MM-DD). Sin vencimiento si se omite. */
+  readonly venceEn?: string;
+  /** Deuda que generó este gasto, si es la cuota fija de un plan a plazo. */
+  readonly deudaId?: string;
 }
 
 /**
@@ -25,6 +29,8 @@ function aFila(entrada: EntradaGastoFijo, usuarioId: string) {
     modo: entrada.modo,
     dia_nominal: entrada.modo === 'quincena_fija' ? (entrada.diaNominal ?? 13) : null,
     fecha_diferida: entrada.modo === 'diferido' ? (entrada.fechaDiferida ?? null) : null,
+    vence_en: entrada.venceEn ?? null,
+    deuda_id: entrada.deudaId ?? null,
   };
 }
 
@@ -40,7 +46,7 @@ export function useGastosFijosItems() {
     try {
       const { data, error: e } = await supabase
         .from('gastos_fijos_items')
-        .select('id, nombre, monto_mensual, modo, dia_nominal, fecha_diferida, activo')
+        .select('id, nombre, monto_mensual, modo, dia_nominal, fecha_diferida, vence_en, activo')
         .order('creado_en', { ascending: true });
       if (e) throw e;
       setGastos(
@@ -51,6 +57,7 @@ export function useGastosFijosItems() {
           modo: g.modo as ModoReparto,
           diaNominal: (g.dia_nominal as 13 | 28 | null) ?? undefined,
           fechaDiferida: (g.fecha_diferida as string | null) ?? undefined,
+          venceEn: (g.vence_en as string | null) ?? undefined,
           activo: g.activo as boolean,
         })),
       );
