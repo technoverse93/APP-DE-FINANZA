@@ -6,13 +6,18 @@
  * módulo no los repite. Lo que faltaba es el modelo de deuda en sí: saldo
  * más tasa de interés, proyectado período a período, para poder comparar
  * "qué pasa si abono más" contra el escenario base.
+ *
+ * La tasa se maneja en términos MENSUALES, no anuales: es como viene
+ * publicada en un estado de cuenta costarricense ("2% mensual sobre saldos"),
+ * así que pedirla anual obligaba a multiplicar por 12 antes de escribirla, un
+ * paso extra que además invita a errores de dedo.
  */
 
 import { avanzarNPeriodos } from '../payroll/schedule';
 import { formatearColones } from '../payroll/distribution';
 
-/** Períodos de pago al año con el calendario de 13 y 28 (2 por mes). */
-export const PERIODOS_POR_ANIO_POR_DEFECTO = 24;
+/** Períodos de pago al mes con el calendario de 13 y 28: siempre dos. */
+export const PERIODOS_POR_MES_POR_DEFECTO = 2;
 
 /** Tope de seguridad: si el abono no alcanza a cubrir el interés, la deuda
  * nunca se salda y hay que cortar la proyección en vez de iterar para siempre. */
@@ -20,11 +25,11 @@ export const MAX_PERIODOS_POR_DEFECTO = 240; // 10 años a razón quincenal
 
 export interface ParametrosTrituradora {
   readonly saldoInicial: number;
-  /** Tasa nominal anual, ej. 0.24 para 24% anual. */
-  readonly tasaAnualNominal: number;
+  /** Tasa nominal MENSUAL, ej. 0.02 para 2% mensual. */
+  readonly tasaMensualNominal: number;
   /** Pago periódico total (interés + capital). */
   readonly abonoPorPeriodo: number;
-  readonly periodosPorAnio?: number;
+  readonly periodosPorMes?: number;
   readonly maxPeriodos?: number;
 }
 
@@ -49,7 +54,7 @@ export interface ResultadoTrituradora {
 function assertParametrosValidos(p: ParametrosTrituradora): void {
   const campos: [string, number][] = [
     ['saldoInicial', p.saldoInicial],
-    ['tasaAnualNominal', p.tasaAnualNominal],
+    ['tasaMensualNominal', p.tasaMensualNominal],
     ['abonoPorPeriodo', p.abonoPorPeriodo],
   ];
   for (const [nombre, valor] of campos) {
@@ -58,12 +63,12 @@ function assertParametrosValidos(p: ParametrosTrituradora): void {
     }
   }
   if (p.saldoInicial < 0) throw new RangeError('El saldo inicial no puede ser negativo');
-  if (p.tasaAnualNominal < 0) throw new RangeError('La tasa anual no puede ser negativa');
+  if (p.tasaMensualNominal < 0) throw new RangeError('La tasa mensual no puede ser negativa');
   if (p.abonoPorPeriodo <= 0) {
     throw new RangeError('El abono por período debe ser positivo');
   }
-  if (p.periodosPorAnio !== undefined && p.periodosPorAnio <= 0) {
-    throw new RangeError('periodosPorAnio debe ser positivo');
+  if (p.periodosPorMes !== undefined && p.periodosPorMes <= 0) {
+    throw new RangeError('periodosPorMes debe ser positivo');
   }
   if (p.maxPeriodos !== undefined && p.maxPeriodos <= 0) {
     throw new RangeError('maxPeriodos debe ser positivo');
@@ -84,9 +89,9 @@ function aColones(valor: number): number {
  */
 export function proyectarTrituradora(parametros: ParametrosTrituradora): ResultadoTrituradora {
   assertParametrosValidos(parametros);
-  const periodosPorAnio = parametros.periodosPorAnio ?? PERIODOS_POR_ANIO_POR_DEFECTO;
+  const periodosPorMes = parametros.periodosPorMes ?? PERIODOS_POR_MES_POR_DEFECTO;
   const maxPeriodos = parametros.maxPeriodos ?? MAX_PERIODOS_POR_DEFECTO;
-  const tasaPorPeriodo = parametros.tasaAnualNominal / periodosPorAnio;
+  const tasaPorPeriodo = parametros.tasaMensualNominal / periodosPorMes;
 
   const periodos: PeriodoTrituradora[] = [];
   let saldo = parametros.saldoInicial;
@@ -130,53 +135,6 @@ export function proyectarTrituradora(parametros: ParametrosTrituradora): Resulta
   };
 }
 
-export interface ParametrosComparacion {
-  readonly saldoInicial: number;
-  readonly tasaAnualNominal: number;
-  readonly abonoBase: number;
-  readonly abonoExtra: number;
-  readonly periodosPorAnio?: number;
-  readonly maxPeriodos?: number;
-}
-
-export interface ComparacionEscenarios {
-  readonly base: ResultadoTrituradora;
-  readonly conExtra: ResultadoTrituradora;
-  /** Positivo si el abono extra ahorra intereses frente al escenario base. */
-  readonly interesAhorrado: number;
-  /** Positivo si el abono extra salda la deuda en menos períodos. */
-  readonly periodosAhorrados: number;
-}
-
-/**
- * Compara el escenario de abono normal contra sumarle un abono extra, para
- * responder la pregunta que importa: "¿cuánto interés me ahorro y cuánto
- * antes termino si abono de más?"
- */
-export function compararEscenarios(parametros: ParametrosComparacion): ComparacionEscenarios {
-  const base = proyectarTrituradora({
-    saldoInicial: parametros.saldoInicial,
-    tasaAnualNominal: parametros.tasaAnualNominal,
-    abonoPorPeriodo: parametros.abonoBase,
-    periodosPorAnio: parametros.periodosPorAnio,
-    maxPeriodos: parametros.maxPeriodos,
-  });
-  const conExtra = proyectarTrituradora({
-    saldoInicial: parametros.saldoInicial,
-    tasaAnualNominal: parametros.tasaAnualNominal,
-    abonoPorPeriodo: parametros.abonoBase + parametros.abonoExtra,
-    periodosPorAnio: parametros.periodosPorAnio,
-    maxPeriodos: parametros.maxPeriodos,
-  });
-
-  return {
-    base,
-    conExtra,
-    interesAhorrado: base.totalInteresPagado - conExtra.totalInteresPagado,
-    periodosAhorrados: base.periodosParaSaldar - conExtra.periodosParaSaldar,
-  };
-}
-
 /* -------------------------------------------------------------------------- */
 /* Priorización entre varias deudas (método avalancha)                        */
 /* -------------------------------------------------------------------------- */
@@ -191,7 +149,7 @@ export class RemanenteInsuficienteError extends Error {
 export interface DeudaParaPriorizar {
   readonly id: string;
   readonly saldoActual: number;
-  readonly tasaAnual: number;
+  readonly tasaMensual: number;
   readonly abonoObjetivo: number;
 }
 
@@ -220,7 +178,7 @@ export function priorizarAbonoExtra(
     throw new RemanenteInsuficienteError();
   }
 
-  const ordenadas = [...deudas].sort((a, b) => b.tasaAnual - a.tasaAnual);
+  const ordenadas = [...deudas].sort((a, b) => b.tasaMensual - a.tasaMensual);
   let restante = abonoExtraDisponible;
 
   return ordenadas.map((deuda) => {
@@ -235,48 +193,48 @@ export function priorizarAbonoExtra(
 }
 
 /* -------------------------------------------------------------------------- */
-/* Proyección con fecha real y mensaje de progreso                            */
+/* Proyección dirigida por remanente libre (sin cuota mínima fija)            */
 /* -------------------------------------------------------------------------- */
 
-export interface ProyeccionGamificada {
-  readonly comparacion: ComparacionEscenarios;
-  /** Fecha real del pago en que queda saldada, o null si no se saldó dentro
-   * del tope de períodos (proyectar una fecha ahí sería una falsa precisión). */
-  readonly fechaSaldoBase: Date | null;
-  readonly fechaSaldoConExtra: Date | null;
-  readonly mensaje: string;
-}
-
-function construirMensajeGamificado(periodosAhorrados: number, interesAhorrado: number): string {
-  if (periodosAhorrados <= 0) {
-    return 'Este abono extra no adelanta la fecha en que quedás libre de esta deuda.';
-  }
-  const meses = periodosAhorrados / 2;
-  const textoMeses = Number.isInteger(meses) ? String(meses) : meses.toFixed(1);
-  return (
-    `Aceleraste tu libertad financiera en ${periodosAhorrados} quincenas (~${textoMeses} meses) ` +
-    `y te ahorrás ${formatearColones(interesAhorrado)} en intereses.`
-  );
+export interface ProyeccionPorPorcentaje {
+  readonly porcentaje: number;
+  readonly abonoPorPeriodo: number;
+  readonly resultado: ResultadoTrituradora;
+  readonly fechaSaldoCero: Date | null;
 }
 
 /**
- * Envuelve `compararEscenarios` con la fecha calendario real de cada
- * escenario (reusando el calendario 13/28 de `core/payroll/schedule`, no una
- * aproximación en meses) y un mensaje dinámico para la pantalla.
+ * Proyecta la deuda cuando el abono por período NO es una cuota fija
+ * predefinida, sino un porcentaje del remanente libre real de la quincena
+ * (lo que sobra por encima de la banda de seguridad, ver
+ * `core/payroll/distribution.ts`). Es el modelo "qué pasa si destino el 50%
+ * de mi remanente a esta deuda", que se recalcula solo cuando cambia el
+ * remanente real o el porcentaje elegido — no hay ningún mínimo mensual
+ * grabado en la deuda que este cálculo tenga que respetar.
+ *
+ * Un remanente libre de cero o negativo (la quincena está ajustada o en
+ * déficit) no tiene nada que asignar: se devuelve sin proyección en vez de
+ * forzar `proyectarTrituradora` con un abono de cero, que lanzaría un error
+ * en vez de decir con claridad "hoy no hay remanente".
  */
-export function proyectarConGamificacion(
-  parametros: ParametrosComparacion,
+export function proyectarPorPorcentajeRemanente(
+  saldoInicial: number,
+  tasaMensualNominal: number,
+  remanenteLibre: number,
+  porcentaje: number,
   fechaInicio: Date,
-): ProyeccionGamificada {
-  const comparacion = compararEscenarios(parametros);
+): ProyeccionPorPorcentaje | null {
+  if (!Number.isFinite(porcentaje) || porcentaje <= 0) return null;
+  const abonoPorPeriodo = aColones(Math.max(0, remanenteLibre) * (porcentaje / 100));
+  if (abonoPorPeriodo <= 0) return null;
+
+  const resultado = proyectarTrituradora({ saldoInicial, tasaMensualNominal, abonoPorPeriodo });
   return {
-    comparacion,
-    fechaSaldoBase: comparacion.base.saldado
-      ? avanzarNPeriodos(fechaInicio, comparacion.base.periodosParaSaldar)
+    porcentaje,
+    abonoPorPeriodo,
+    resultado,
+    fechaSaldoCero: resultado.saldado
+      ? avanzarNPeriodos(fechaInicio, resultado.periodosParaSaldar)
       : null,
-    fechaSaldoConExtra: comparacion.conExtra.saldado
-      ? avanzarNPeriodos(fechaInicio, comparacion.conExtra.periodosParaSaldar)
-      : null,
-    mensaje: construirMensajeGamificado(comparacion.periodosAhorrados, comparacion.interesAhorrado),
   };
 }

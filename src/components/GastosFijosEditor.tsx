@@ -17,6 +17,7 @@ interface Props {
   readonly gastos: readonly GastoFijoItem[];
   readonly payday: Payday;
   readonly onCrear: (entrada: EntradaGastoFijo) => void;
+  readonly onActualizar: (id: string, entrada: EntradaGastoFijo) => void;
   readonly onEliminar: (id: string) => void;
 }
 
@@ -39,6 +40,14 @@ const MODOS: readonly { modo: ModoReparto; titulo: string; ayuda: string }[] = [
   },
 ];
 
+const FORMULARIO_VACIO = {
+  nombre: '',
+  textoMonto: '',
+  modo: 'mitades' as ModoReparto,
+  diaNominal: 13 as 13 | 28,
+  fechaDiferida: '',
+};
+
 function limpiarMonto(texto: string): number {
   const n = Number(texto.replace(/[^\d]/g, ''));
   return Number.isFinite(n) ? n : 0;
@@ -52,13 +61,21 @@ function fechaIsoValida(texto: string): boolean {
 }
 
 /**
- * Alta y listado de gastos fijos con su regla de reparto entre quincenas.
+ * Alta, edición y listado de gastos fijos con su regla de reparto entre
+ * quincenas.
  *
  * Es el control que faltaba: el motor (`core/payroll/gastosFijos.ts`) ya sabía
  * repartir un gasto mensual entre las dos quincenas o cargarlo entero en una
  * sola, pero no había forma de decírselo desde la app. Sin esta pantalla un
  * alquiler de 150.000 pesaba igual en las dos quincenas, como si fueran
  * 300.000 al mes.
+ *
+ * Tocar un gasto ya guardado lo carga en el mismo formulario del alta en vez
+ * de abrir uno aparte: es exactamente los mismos campos, y duplicarlos
+ * habría significado mantener dos formularios que pueden desalinearse. Lo
+ * que faltaba de verdad era poder CAMBIAR la regla de un gasto que ya existe
+ * — por ejemplo, pasar un alquiler que hoy cae entero en una quincena a
+ * repartirse mitad y mitad — sin tener que borrarlo y crearlo de nuevo.
  *
  * Cada gasto de la lista muestra cuánto aporta **a la quincena en curso**, no
  * su monto mensual: es la cifra que efectivamente se descuenta ahora, y la
@@ -68,16 +85,38 @@ export const GastosFijosEditor = memo(function GastosFijosEditor({
   gastos,
   payday,
   onCrear,
+  onActualizar,
   onEliminar,
 }: Props) {
-  const [nombre, setNombre] = useState('');
-  const [textoMonto, setTextoMonto] = useState('');
-  const [modo, setModo] = useState<ModoReparto>('mitades');
-  const [diaNominal, setDiaNominal] = useState<13 | 28>(13);
-  const [fechaDiferida, setFechaDiferida] = useState('');
+  const [editandoId, setEditandoId] = useState<string | null>(null);
+  const [nombre, setNombre] = useState(FORMULARIO_VACIO.nombre);
+  const [textoMonto, setTextoMonto] = useState(FORMULARIO_VACIO.textoMonto);
+  const [modo, setModo] = useState<ModoReparto>(FORMULARIO_VACIO.modo);
+  const [diaNominal, setDiaNominal] = useState<13 | 28>(FORMULARIO_VACIO.diaNominal);
+  const [fechaDiferida, setFechaDiferida] = useState(FORMULARIO_VACIO.fechaDiferida);
   const [aviso, setAviso] = useState<string | null>(null);
 
-  const crear = useCallback(() => {
+  const limpiarFormulario = useCallback(() => {
+    setEditandoId(null);
+    setNombre(FORMULARIO_VACIO.nombre);
+    setTextoMonto(FORMULARIO_VACIO.textoMonto);
+    setModo(FORMULARIO_VACIO.modo);
+    setDiaNominal(FORMULARIO_VACIO.diaNominal);
+    setFechaDiferida(FORMULARIO_VACIO.fechaDiferida);
+    setAviso(null);
+  }, []);
+
+  const empezarEdicion = useCallback((gasto: GastoFijoItem) => {
+    setEditandoId(gasto.id);
+    setNombre(gasto.nombre);
+    setTextoMonto(String(gasto.montoMensual));
+    setModo(gasto.modo);
+    setDiaNominal(gasto.diaNominal ?? 13);
+    setFechaDiferida(gasto.fechaDiferida ?? '');
+    setAviso(null);
+  }, []);
+
+  const guardar = useCallback(() => {
     const monto = limpiarMonto(textoMonto);
     if (!nombre.trim() || monto <= 0) {
       setAviso('Poné un nombre y un monto mayor a cero.');
@@ -91,18 +130,26 @@ export const GastosFijosEditor = memo(function GastosFijosEditor({
       return;
     }
 
-    setAviso(null);
-    onCrear({
+    const entrada: EntradaGastoFijo = {
       nombre: nombre.trim(),
       montoMensual: monto,
       modo,
       diaNominal: modo === 'quincena_fija' ? diaNominal : undefined,
       fechaDiferida: modo === 'diferido' ? fechaDiferida : undefined,
-    });
-    setNombre('');
-    setTextoMonto('');
-    setFechaDiferida('');
-  }, [nombre, textoMonto, modo, diaNominal, fechaDiferida, onCrear]);
+    };
+    if (editandoId) {
+      onActualizar(editandoId, entrada);
+    } else {
+      onCrear(entrada);
+    }
+    limpiarFormulario();
+  }, [nombre, textoMonto, modo, diaNominal, fechaDiferida, editandoId, onCrear, onActualizar, limpiarFormulario]);
+
+  const eliminarEnEdicion = useCallback(() => {
+    if (!editandoId) return;
+    onEliminar(editandoId);
+    limpiarFormulario();
+  }, [editandoId, onEliminar, limpiarFormulario]);
 
   const ayudaModo = MODOS.find((m) => m.modo === modo)?.ayuda ?? '';
 
@@ -122,10 +169,10 @@ export const GastosFijosEditor = memo(function GastosFijosEditor({
                     : g.modo === 'quincena_fija'
                       ? `solo el ${g.diaNominal}`
                       : `pospuesto al ${g.fechaDiferida}`
-                } · tocar para quitar`}
+                } · tocar para editar`}
                 valor={formatearColones(enEsta)}
-                tono={enEsta > 0 ? 'normal' : 'atencion'}
-                onPress={() => onEliminar(g.id)}
+                tono={g.id === editandoId ? 'atencion' : enEsta > 0 ? 'normal' : 'atencion'}
+                onPress={() => empezarEdicion(g)}
                 ultima={i === gastos.length - 1}
               />
             );
@@ -139,6 +186,9 @@ export const GastosFijosEditor = memo(function GastosFijosEditor({
       </Card>
 
       <View style={styles.formulario}>
+        {editandoId ? (
+          <Text style={styles.tituloFormulario}>Editando "{nombre}"</Text>
+        ) : null}
         <TextInput
           style={styles.input}
           value={nombre}
@@ -202,7 +252,17 @@ export const GastosFijosEditor = memo(function GastosFijosEditor({
 
         {aviso ? <Text style={styles.aviso}>{aviso}</Text> : null}
 
-        <PrimaryButton titulo="Agregar gasto fijo" onPress={crear} />
+        <PrimaryButton titulo={editandoId ? 'Guardar cambios' : 'Agregar gasto fijo'} onPress={guardar} />
+        {editandoId ? (
+          <View style={styles.filaAccionesEdicion}>
+            <Text style={styles.accionSecundaria} onPress={limpiarFormulario}>
+              Cancelar
+            </Text>
+            <Text style={styles.accionEliminar} onPress={eliminarEnEdicion}>
+              Eliminar este gasto
+            </Text>
+          </View>
+        ) : null}
       </View>
     </View>
   );
@@ -212,6 +272,7 @@ const styles = StyleSheet.create({
   contenedor: { gap: spacing.sm },
   formulario: { gap: spacing.sm, marginTop: spacing.sm },
   vacio: { ...typography.subheadline, color: colors.labelSecondary },
+  tituloFormulario: { ...typography.headline, color: colors.label },
   etiqueta: { ...typography.footnote, color: colors.labelSecondary, marginTop: spacing.xs },
   ayuda: { ...typography.caption1, color: colors.labelTertiary },
   filaChips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
@@ -227,4 +288,11 @@ const styles = StyleSheet.create({
   input: {
     ...campoTexto,
   },
+  filaAccionesEdicion: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingTop: spacing.xs,
+  },
+  accionSecundaria: { ...typography.footnote, color: colors.labelSecondary },
+  accionEliminar: { ...typography.footnote, color: colors.red },
 });

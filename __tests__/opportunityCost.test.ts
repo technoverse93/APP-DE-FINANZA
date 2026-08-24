@@ -4,7 +4,7 @@ const DEUDA_CARA = {
   id: 'cara',
   nombre: 'Tarjeta',
   saldoActual: 1_000_000,
-  tasaAnual: 0.36,
+  tasaMensual: 0.03,
   abonoObjetivo: 50_000,
 };
 
@@ -12,7 +12,7 @@ const DEUDA_BARATA = {
   id: 'barata',
   nombre: 'Préstamo personal',
   saldoActual: 1_000_000,
-  tasaAnual: 0.12,
+  tasaMensual: 0.01,
   abonoObjetivo: 50_000,
 };
 

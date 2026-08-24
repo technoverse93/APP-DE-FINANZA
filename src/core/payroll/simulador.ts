@@ -36,7 +36,8 @@ export interface ContextoQuincena {
 /** Deuda contra la que se mide la aceleración del escenario. */
 export interface DeudaSimulada {
   readonly saldoActual: number;
-  readonly tasaAnual: number;
+  /** Tasa nominal MENSUAL, ej. 0.02 para 2% mensual. */
+  readonly tasaMensual: number;
   /** Abono por quincena que ya se hace hoy, sin contar el excedente. */
   readonly abonoObjetivo: number;
 }
@@ -96,7 +97,7 @@ function simular(
     if (abonoTotal > 0) {
       proyeccion = proyectarTrituradora({
         saldoInicial: deuda.saldoActual,
-        tasaAnualNominal: deuda.tasaAnual,
+        tasaMensualNominal: deuda.tasaMensual,
         abonoPorPeriodo: abonoTotal,
       });
     }

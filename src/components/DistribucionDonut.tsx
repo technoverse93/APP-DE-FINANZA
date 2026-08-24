@@ -25,22 +25,23 @@ const GROSOR_TRAZO = 18;
  * así que sigue siendo válido aunque algún escenario (ej. déficit) no cierre
  * exacto contra esa cifra.
  */
-export const DistribucionDonut = memo(function DistribucionDonut({ segmentos, tamano = 160 }: Props) {
+export const DistribucionDonut = memo(function DistribucionDonut({ segmentos, tamano = 120 }: Props) {
   const radio = (tamano - GROSOR_TRAZO) / 2;
   const circunferencia = 2 * Math.PI * radio;
 
-  const arcos = useMemo(() => {
+  const { arcos, total } = useMemo(() => {
     const positivos = segmentos.filter((s) => s.valor > 0);
     const total = positivos.reduce((suma, s) => suma + s.valor, 0);
-    if (total <= 0) return [];
+    if (total <= 0) return { arcos: [], total: 0 };
 
     let acumulado = 0;
-    return positivos.map((s) => {
+    const arcos = positivos.map((s) => {
       const largo = (s.valor / total) * circunferencia;
       const arco = { ...s, largo, dashoffset: -acumulado };
       acumulado += largo;
       return arco;
     });
+    return { arcos, total };
   }, [segmentos, circunferencia]);
 
   return (
@@ -76,8 +77,20 @@ export const DistribucionDonut = memo(function DistribucionDonut({ segmentos, ta
           .map((s, i) => (
             <View key={i} style={styles.filaLeyenda}>
               <View style={[styles.punto, { backgroundColor: s.color }]} />
-              <Text style={styles.etiquetaLeyenda}>{s.etiqueta}</Text>
-              <Text style={styles.valorLeyenda}>{formatearColones(s.valor)}</Text>
+              <Text style={styles.etiquetaLeyenda} numberOfLines={1}>
+                {s.etiqueta}
+              </Text>
+              {/* Monto y porcentaje apilados, no en columnas separadas: con
+                  tres textos en una sola fila (etiqueta + % + monto) el monto
+                  se salía del borde de la tarjeta en 360 dp — no había ancho
+                  para los tres. Apilados comparten una sola columna a la
+                  derecha. */}
+              <View style={styles.columnaValor}>
+                <Text style={styles.valorLeyenda}>{formatearColones(s.valor)}</Text>
+                <Text style={styles.porcentajeLeyenda}>
+                  {total > 0 ? `${Math.round((s.valor / total) * 100)}%` : ''}
+                </Text>
+              </View>
             </View>
           ))}
       </View>
@@ -91,5 +104,11 @@ const styles = StyleSheet.create({
   filaLeyenda: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   punto: { width: 10, height: 10, borderRadius: 5 },
   etiquetaLeyenda: { ...typography.footnote, color: colors.labelSecondary, flex: 1 },
+  columnaValor: { alignItems: 'flex-end' },
+  porcentajeLeyenda: {
+    ...typography.caption2,
+    color: colors.labelTertiary,
+    fontVariant: ['tabular-nums'],
+  },
   valorLeyenda: { ...typography.footnote, color: colors.label, fontVariant: ['tabular-nums'] },
 });
