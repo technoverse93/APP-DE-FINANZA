@@ -19,24 +19,32 @@ import {
   BlurHeader,
   Card,
   DistribucionDonut,
+  GastosFijosEditor,
+  GraficoBarrasFlujo,
   ListRow,
   PrimaryButton,
   SectionHeader,
+  SimuladorCard,
+  type BarraFlujo,
   type SegmentoDonut,
 } from '../components';
 import { debePedirColilla, fechaAvisoColilla } from '../core/payroll/colilla';
 import { distribuirQuincena, formatearColones, type GastosFijos } from '../core/payroll/distribution';
+import { totalEnQuincena } from '../core/payroll/gastosFijos';
 import { calcularIngresoDisponible } from '../core/payroll/ingresoDisponible';
 import { previousPayday } from '../core/payroll/schedule';
+import type { ContextoQuincena, DeudaSimulada } from '../core/payroll/simulador';
 import { calcularCostoTransporteProyectado } from '../core/payroll/transporte';
 import { pedirSincronizacion } from '../lib/backgroundSync';
 import { useColilla } from '../state/useColilla';
+import { useDeudas } from '../state/useDeudas';
+import { useGastosFijosItems } from '../state/useGastosFijosItems';
 import { useLibroMayor } from '../state/useLibroMayor';
 import { useQuincena } from '../state/useQuincena';
 import { useRutasTransporte } from '../state/useRutasTransporte';
 import { useSesion } from '../state/useSesion';
 import { useTransacciones } from '../state/useTransacciones';
-import { colors, radius, spacing, typography } from '../theme';
+import { campoTexto, colors, radius, spacing, typography } from '../theme';
 
 const FORMATO_FECHA = new Intl.DateTimeFormat('es-CR', {
   weekday: 'long',
@@ -79,6 +87,8 @@ export function ResumenScreen() {
   const rutas = useRutasTransporte();
   const transacciones = useTransacciones();
   const colilla = useColilla(payday);
+  const gastosFijosItems = useGastosFijosItems();
+  const deudasHook = useDeudas();
   const { sesion, cerrarSesion } = useSesion();
 
   const [sincronizando, setSincronizando] = useState(false);
@@ -205,7 +215,20 @@ export function ResumenScreen() {
     [rutas.costoDiarioTotal, inicioQuincena, payday],
   );
 
-  const otrosGastosFijos = gastosFijos.casa + gastosFijos.comida + gastosFijos.deudaBase;
+  /**
+   * Los gastos fijos con regla de reparto son la fuente nueva; los campos
+   * casa/comida/deudaBase de la tabla vieja se siguen sumando porque tienen
+   * datos reales ya cargados y aplican por igual a cada quincena. Las dos
+   * fuentes conviven en vez de que una pise a la otra: descartar la vieja
+   * borraría de la pantalla montos que el usuario sí está pagando.
+   */
+  const gastosFijosRepartidos = useMemo(
+    () => totalEnQuincena(gastosFijosItems.gastos, payday),
+    [gastosFijosItems.gastos, payday],
+  );
+
+  const otrosGastosFijos =
+    gastosFijos.casa + gastosFijos.comida + gastosFijos.deudaBase + gastosFijosRepartidos;
 
   const ingresoDisponible = useMemo(
     () =>
@@ -242,6 +265,43 @@ export function ResumenScreen() {
     [ingresoDisponible],
   );
 
+  /** Contexto de la quincena, tal cual lo consume el simulador. */
+  const contextoSimulador: ContextoQuincena = useMemo(
+    () => ({
+      ingresosExtra: ingresosExtraQuincena,
+      transporteProyectado,
+      gastosDiariosReales,
+      otrosGastosFijos,
+    }),
+    [ingresosExtraQuincena, transporteProyectado, gastosDiariosReales, otrosGastosFijos],
+  );
+
+  /** Se simula contra la deuda más cara: es la que un colón extra alivia más. */
+  const deudaMasCara: DeudaSimulada | null = useMemo(() => {
+    const cara = [...deudasHook.deudas].sort((a, b) => b.tasaAnual - a.tasaAnual)[0];
+    return cara
+      ? {
+          saldoActual: cara.saldoActual,
+          tasaAnual: cara.tasaAnual,
+          abonoObjetivo: cara.abonoObjetivo,
+        }
+      : null;
+  }, [deudasHook.deudas]);
+
+  const barrasFlujo: BarraFlujo[] = useMemo(
+    () => [
+      {
+        etiqueta: 'Ingreso base + extra',
+        valor: (colilla.monto ?? 170_000) + ingresosExtraQuincena,
+        color: colors.green,
+      },
+      { etiqueta: 'Otros gastos fijos', valor: otrosGastosFijos, color: colors.labelTertiary },
+      { etiqueta: 'Transporte proyectado', valor: transporteProyectado, color: colors.orange },
+      { etiqueta: 'Gastos diarios reales', valor: gastosDiariosReales, color: colors.red },
+    ],
+    [colilla.monto, ingresosExtraQuincena, otrosGastosFijos, transporteProyectado, gastosDiariosReales],
+  );
+
   const segmentosDistribucion: SegmentoDonut[] = useMemo(
     () => [
       { etiqueta: 'Otros gastos fijos', valor: otrosGastosFijos, color: colors.labelTertiary },
@@ -274,7 +334,15 @@ export function ResumenScreen() {
             dice acá. Un total calculado sobre datos que no se guardaron es
             peor que un error visible. */}
         <AvisoError
-          errores={[error, libro.error, rutas.error, transacciones.error, colilla.error]}
+          errores={[
+            error,
+            libro.error,
+            rutas.error,
+            transacciones.error,
+            colilla.error,
+            gastosFijosItems.error,
+            deudasHook.error,
+          ]}
         />
 
         <Card>
@@ -418,8 +486,34 @@ export function ResumenScreen() {
         </View>
 
         <View style={styles.seccion}>
+          <SectionHeader titulo="Gastos fijos del mes" />
+          <GastosFijosEditor
+            gastos={gastosFijosItems.gastos}
+            payday={payday}
+            onCrear={(entrada) => void gastosFijosItems.crear(entrada)}
+            onEliminar={(id) => void gastosFijosItems.eliminar(id)}
+          />
+        </View>
+
+        <View style={styles.seccion}>
+          <SectionHeader titulo="Ingresos contra gastos" />
+          <Card>
+            <GraficoBarrasFlujo barras={barrasFlujo} />
+          </Card>
+        </View>
+
+        <View style={styles.seccion}>
+          <SectionHeader titulo="¿Y si ganara más?" />
+          <SimuladorCard
+            contexto={contextoSimulador}
+            ingresoBaseReal={colilla.monto ?? undefined}
+            deuda={deudaMasCara}
+          />
+        </View>
+
+        <View style={styles.seccion}>
           <SectionHeader
-            titulo="Otros gastos fijos"
+            titulo="Casa, comida y deuda base"
             accion={editandoGastos ? undefined : 'Editar'}
             onAccionPress={empezarEdicionGastos}
           />
@@ -558,11 +652,6 @@ const styles = StyleSheet.create({
   etiquetaCampo: { ...typography.footnote, color: colors.labelSecondary },
   mensajeVacio: { ...typography.subheadline, color: colors.labelSecondary, padding: spacing.lg },
   inputGasto: {
-    ...typography.body,
-    backgroundColor: colors.fill,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    color: colors.label,
+    ...campoTexto,
   },
 });

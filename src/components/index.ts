@@ -9,3 +9,7 @@ export { AvisoError } from './AvisoError';
 export { DistribucionDonut, type SegmentoDonut } from './DistribucionDonut';
 export { OpportunityAlertToast } from './OpportunityAlertToast';
 export { GmailSyncCard } from './GmailSyncCard';
+export { GraficoAmortizacion, type SerieAmortizacion } from './GraficoAmortizacion';
+export { GraficoBarrasFlujo, type BarraFlujo } from './GraficoBarrasFlujo';
+export { SimuladorCard } from './SimuladorCard';
+export { GastosFijosEditor } from './GastosFijosEditor';
