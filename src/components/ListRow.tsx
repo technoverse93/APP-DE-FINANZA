@@ -71,13 +71,15 @@ const styles = StyleSheet.create({
     minHeight: 44,
     gap: spacing.md,
   },
+  // Un pixel entero y no `hairlineWidth`: sobre fondo casi negro, media
+  // línea a baja opacidad desaparece y las filas se pegan entre sí.
   conSeparador: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: 1,
     borderBottomColor: colors.separator,
   },
   presionada: { backgroundColor: colors.surfacePressed },
-  textos: { flex: 1, gap: 2 },
-  titulo: { ...typography.body, color: colors.label },
-  detalle: { ...typography.footnote, color: colors.labelSecondary },
-  valor: { ...typography.body, fontVariant: ['tabular-nums'] },
+  textos: { flex: 1, gap: 1 },
+  titulo: { ...typography.subheadline, color: colors.label },
+  detalle: { ...typography.caption1, color: colors.labelTertiary },
+  valor: { ...typography.amountSmall },
 });

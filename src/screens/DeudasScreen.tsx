@@ -16,10 +16,12 @@ import {
   BlurHeader,
   Card,
   GmailSyncCard,
+  GraficoAmortizacion,
   ListRow,
   OpportunityAlertToast,
   PrimaryButton,
   SectionHeader,
+  type SerieAmortizacion,
 } from '../components';
 import { calcularCostoOportunidad, type CostoOportunidad } from '../core/analytics/opportunityCost';
 import { priorizarAbonoExtra, proyectarConGamificacion } from '../core/debt/crusher';
@@ -27,7 +29,7 @@ import { formatearColones } from '../core/payroll/distribution';
 import { googleAuthConfigurado } from '../lib/googleAuth';
 import { type Deuda, useDeudas } from '../state/useDeudas';
 import { type MovimientoLibro, useLibroMayor } from '../state/useLibroMayor';
-import { colors, radius, spacing, typography } from '../theme';
+import { campoTexto, colors, ficha, fichaActiva, radius, spacing, typography } from '../theme';
 
 function limpiarMonto(texto: string): number {
   const n = Number(texto.replace(/[^\d]/g, ''));
@@ -84,6 +86,43 @@ export function DeudasScreen() {
 
   const [alertaCosto, setAlertaCosto] = useState<CostoOportunidad | null>(null);
 
+  const [nombreDeuda, setNombreDeuda] = useState('');
+  const [textoSaldo, setTextoSaldo] = useState('');
+  const [textoTasa, setTextoTasa] = useState('');
+  const [textoAbonoObjetivo, setTextoAbonoObjetivo] = useState('');
+  const [avisoDeuda, setAvisoDeuda] = useState<string | null>(null);
+
+  const agregarDeuda = useCallback(() => {
+    const saldo = limpiarMonto(textoSaldo);
+    const abono = limpiarMonto(textoAbonoObjetivo);
+    // La tasa se escribe como porcentaje ("24") porque es como viene en el
+    // estado de cuenta; el motor la quiere como fracción (0.24).
+    const tasaPorciento = Number(textoTasa.replace(',', '.').replace(/[^\d.]/g, ''));
+    if (!nombreDeuda.trim() || saldo <= 0) {
+      setAvisoDeuda('Poné un nombre y el saldo que debés hoy.');
+      return;
+    }
+    if (!Number.isFinite(tasaPorciento) || tasaPorciento < 0) {
+      setAvisoDeuda('Escribí la tasa anual como número, por ejemplo 24 para 24%.');
+      return;
+    }
+    if (abono <= 0) {
+      setAvisoDeuda('Poné cuánto abonás por quincena. Sin eso no se puede proyectar el plazo.');
+      return;
+    }
+    setAvisoDeuda(null);
+    void deudasHook.guardar({
+      nombre: nombreDeuda.trim(),
+      saldoActual: saldo,
+      tasaAnual: tasaPorciento / 100,
+      abonoObjetivo: abono,
+    });
+    setNombreDeuda('');
+    setTextoSaldo('');
+    setTextoTasa('');
+    setTextoAbonoObjetivo('');
+  }, [nombreDeuda, textoSaldo, textoTasa, textoAbonoObjetivo, deudasHook]);
+
   const agregarMovimiento = useCallback(() => {
     const monto = limpiarMonto(textoMontoLibro);
     if (monto <= 0) return;
@@ -123,6 +162,29 @@ export function DeudasScreen() {
     );
   }, [deudaSeleccionada, abonoExtra]);
 
+  /** Las dos curvas de saldo, para ver el efecto del abono extra en vez de
+   * solo leerlo como una fecha. Solo se dibujan si hay extra que comparar:
+   * dos curvas idénticas superpuestas no dicen nada. */
+  const seriesAmortizacion: SerieAmortizacion[] = useMemo(() => {
+    if (!proyeccion || abonoExtra <= 0) return [];
+    const curva = (periodos: readonly { saldoInicial: number; saldoFinal: number }[]) =>
+      periodos.length === 0
+        ? []
+        : [periodos[0]!.saldoInicial, ...periodos.map((p) => p.saldoFinal)];
+    return [
+      {
+        etiqueta: 'Plan base',
+        color: colors.labelTertiary,
+        saldos: curva(proyeccion.comparacion.base.periodos),
+      },
+      {
+        etiqueta: `Con ${formatearColones(abonoExtra)} extra`,
+        color: colors.green,
+        saldos: curva(proyeccion.comparacion.conExtra.periodos),
+      },
+    ];
+  }, [proyeccion, abonoExtra]);
+
   /** Cómo repartir el abono extra entre TODAS las deudas (método avalancha):
    * solo tiene sentido mostrarlo con dos o más deudas — con una sola, el
    * extra ya va completo a esa deuda y esta tarjeta no agregaría nada. */
@@ -139,7 +201,11 @@ export function DeudasScreen() {
 
   return (
     <SafeAreaView style={styles.pantalla} edges={['top', 'left', 'right']}>
-      <BlurHeader titulo="Deudas" subtitulo="Libro Mayor y Trituradora de Deudas" />
+      <BlurHeader
+        titulo="Deudas"
+        subtitulo="Libro Mayor · Trituradora"
+        enVivo={!refrescando}
+      />
       <KeyboardAvoidingView
         style={styles.flexible}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -241,8 +307,8 @@ export function DeudasScreen() {
           <Card>
             {deudasHook.deudas.length === 0 ? (
               <Text style={styles.mensajeVacio}>
-                Todavía no hay deudas registradas. Se agregan desde Supabase (tabla `deudas`) con
-                saldo, tasa anual y abono objetivo.
+                Todavía no hay deudas registradas. Agregá la primera abajo y la Trituradora te
+                dice en qué fecha quedás libre.
               </Text>
             ) : (
               <View style={styles.formulario}>
@@ -279,6 +345,47 @@ export function DeudasScreen() {
               </View>
             )}
           </Card>
+
+          {/* El alta de deudas vive acá y no en una pantalla aparte: es lo
+              primero que hay que hacer para que la Trituradora tenga algo
+              que triturar, así que esconderlo detrás de otro toque sería
+              esconder justamente el punto de entrada. */}
+          <View style={styles.formularioDeuda}>
+            <Text style={styles.etiquetaCampo}>Agregar una deuda</Text>
+            <TextInput
+              style={styles.input}
+              value={nombreDeuda}
+              onChangeText={setNombreDeuda}
+              placeholder="Nombre (ej. Tarjeta BAC, Préstamo)"
+              placeholderTextColor={colors.labelTertiary}
+            />
+            <TextInput
+              style={styles.input}
+              value={textoSaldo}
+              onChangeText={setTextoSaldo}
+              keyboardType="number-pad"
+              placeholder="Saldo que debés hoy"
+              placeholderTextColor={colors.labelTertiary}
+            />
+            <TextInput
+              style={styles.input}
+              value={textoTasa}
+              onChangeText={setTextoTasa}
+              keyboardType="decimal-pad"
+              placeholder="Tasa anual en % (ej. 24)"
+              placeholderTextColor={colors.labelTertiary}
+            />
+            <TextInput
+              style={styles.input}
+              value={textoAbonoObjetivo}
+              onChangeText={setTextoAbonoObjetivo}
+              keyboardType="number-pad"
+              placeholder="Cuánto abonás por quincena"
+              placeholderTextColor={colors.labelTertiary}
+            />
+            {avisoDeuda ? <Text style={styles.avisoDeuda}>{avisoDeuda}</Text> : null}
+            <PrimaryButton titulo="Guardar deuda" onPress={agregarDeuda} />
+          </View>
         </View>
 
         {proyeccion ? (
@@ -302,6 +409,11 @@ export function DeudasScreen() {
               />
             </Card>
             <Text style={styles.mensajeGamificado}>{proyeccion.mensaje}</Text>
+            {seriesAmortizacion.length > 0 ? (
+              <Card style={styles.tarjetaGrafico}>
+                <GraficoAmortizacion series={seriesAmortizacion} />
+              </Card>
+            ) : null}
           </View>
         ) : null}
 
@@ -343,24 +455,22 @@ const styles = StyleSheet.create({
   avisoCostoOportunidad: { marginTop: spacing.md },
   formulario: { gap: spacing.md },
   filaTipo: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' },
-  chip: {
-    ...typography.footnote,
-    color: colors.labelSecondary,
-    backgroundColor: colors.fill,
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    overflow: 'hidden',
-  },
-  chipActivo: {
-    color: colors.labelInverse,
-    backgroundColor: colors.brandGold,
-  },
+  chip: { ...ficha },
+  chipActivo: { ...fichaActiva },
   etiquetaCampo: { ...typography.footnote, color: colors.labelSecondary },
+  formularioDeuda: { gap: spacing.sm, marginTop: spacing.md },
+  tarjetaGrafico: { marginTop: spacing.md },
+  avisoDeuda: {
+    ...typography.footnote,
+    color: colors.label,
+    backgroundColor: colors.orangeSoft,
+    borderRadius: radius.md,
+    padding: spacing.md,
+  },
   mensajeGamificado: {
     ...typography.subheadline,
     color: colors.label,
-    backgroundColor: colors.brandGoldSoft,
+    backgroundColor: colors.greenSoft,
     borderRadius: radius.md,
     padding: spacing.md,
     marginTop: spacing.sm,
@@ -372,12 +482,7 @@ const styles = StyleSheet.create({
     paddingBottom: 0,
   },
   input: {
-    ...typography.body,
-    backgroundColor: colors.fill,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    color: colors.label,
+    ...campoTexto,
   },
   mensajeVacio: { ...typography.subheadline, color: colors.labelSecondary },
 });

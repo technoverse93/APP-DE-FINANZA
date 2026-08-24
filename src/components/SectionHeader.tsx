@@ -9,17 +9,23 @@ interface Props {
   readonly onAccionPress?: () => void;
 }
 
-/** Encabezado de sección en mayúsculas, como las listas agrupadas de iOS.
- * Solo recibe props primitivas y un callback (sin `children`), así que
- * memoizar sí evita re-renders reales cuando el resto de la pantalla
- * cambia. */
+/**
+ * Rótulo de sección: versalita monoespaciada con una barra de acento delante.
+ *
+ * La barra no es adorno: en una pantalla densa, donde los paneles se suceden
+ * casi sin aire entre ellos, es la marca que dice "acá empieza otra cosa".
+ * Sin ella los rótulos se confunden con las etiquetas internas de los
+ * paneles, que usan la misma versalita.
+ */
 export const SectionHeader = memo(function SectionHeader({ titulo, accion, onAccionPress }: Props) {
   return (
     <View style={styles.contenedor}>
+      <View style={styles.barra} />
       <Text style={styles.titulo}>{titulo.toUpperCase()}</Text>
+      <View style={styles.linea} />
       {accion ? (
         <Text style={styles.accion} onPress={onAccionPress}>
-          {accion}
+          {accion.toUpperCase()}
         </Text>
       ) : null}
     </View>
@@ -29,11 +35,18 @@ export const SectionHeader = memo(function SectionHeader({ titulo, accion, onAcc
 const styles = StyleSheet.create({
   contenedor: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    paddingHorizontal: spacing.lg,
+    alignItems: 'center',
+    gap: spacing.sm,
     paddingBottom: spacing.sm,
   },
-  titulo: { ...typography.footnote, color: colors.labelSecondary, letterSpacing: 0.5 },
-  accion: { ...typography.footnote, color: colors.blue },
+  barra: {
+    width: 2,
+    height: 11,
+    borderRadius: 1,
+    backgroundColor: colors.acento,
+  },
+  titulo: { ...typography.rotulo, color: colors.labelSecondary },
+  /** Fila de guía que corre hasta el borde: la retícula del instrumento. */
+  linea: { flex: 1, height: 1, backgroundColor: colors.separator },
+  accion: { ...typography.rotulo, color: colors.acento },
 });

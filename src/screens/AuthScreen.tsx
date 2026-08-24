@@ -12,7 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Card, PrimaryButton } from '../components';
 import { supabase } from '../lib/supabase';
-import { colors, radius, spacing, typography } from '../theme';
+import { campoTexto, colors, radius, spacing, typography } from '../theme';
 
 type Modo = 'entrar' | 'crear';
 
@@ -130,7 +130,7 @@ export function AuthScreen() {
                 cargando={ocupado}
               />
 
-              {ocupado ? <ActivityIndicator color={colors.blue} /> : null}
+              {ocupado ? <ActivityIndicator color={colors.acento} /> : null}
               {aviso ? <Text style={styles.aviso}>{aviso}</Text> : null}
               {error ? <Text style={styles.error}>{error}</Text> : null}
             </View>
@@ -173,12 +173,7 @@ const styles = StyleSheet.create({
   formulario: { gap: spacing.md },
   etiqueta: { ...typography.footnote, color: colors.labelSecondary },
   input: {
-    ...typography.body,
-    backgroundColor: colors.fill,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    color: colors.label,
+    ...campoTexto,
   },
   aviso: {
     ...typography.footnote,
@@ -190,7 +185,7 @@ const styles = StyleSheet.create({
   error: { ...typography.footnote, color: colors.red },
   alternar: {
     ...typography.subheadline,
-    color: colors.blue,
+    color: colors.acento,
     textAlign: 'center',
     paddingVertical: spacing.md,
   },

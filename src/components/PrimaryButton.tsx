@@ -1,22 +1,34 @@
 import { memo } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text } from 'react-native';
-import { colors, radius, spacing, typography } from '../theme';
+import { BORDE, colors, radius, shadow, spacing, typography } from '../theme';
 
 interface Props {
   readonly titulo: string;
   readonly onPress: () => void;
   readonly deshabilitado?: boolean;
   readonly cargando?: boolean;
+  /** Acción secundaria: contorno en vez de relleno sólido. */
+  readonly secundario?: boolean;
 }
 
-/** Memoizado: solo evita re-render real si quien lo usa pasa un `onPress`
+/**
+ * Botón de acción.
+ *
+ * En esta dirección el botón es el único elemento con relleno saturado de la
+ * pantalla, y lleva un resplandor tenue del mismo verde: sobre un fondo casi
+ * negro es lo que lo hace leer como "encendido" y lo separa de los paneles,
+ * que son todos línea y superficie apagada.
+ *
+ * Memoizado: solo evita re-render real si quien lo usa pasa un `onPress`
  * estable (`useCallback`) — de lo contrario una prop función nueva en cada
- * render invalida la comparación igual. */
+ * render invalida la comparación igual.
+ */
 export const PrimaryButton = memo(function PrimaryButton({
   titulo,
   onPress,
   deshabilitado,
   cargando,
+  secundario,
 }: Props) {
   const inactivo = deshabilitado || cargando;
   return (
@@ -27,14 +39,17 @@ export const PrimaryButton = memo(function PrimaryButton({
       accessibilityState={{ disabled: !!inactivo, busy: !!cargando }}
       style={({ pressed }) => [
         styles.boton,
+        secundario ? styles.secundario : styles.primario,
         pressed && !inactivo && styles.presionado,
         inactivo && styles.inactivo,
       ]}
     >
       {cargando ? (
-        <ActivityIndicator color={colors.labelInverse} />
+        <ActivityIndicator color={secundario ? colors.acento : colors.labelInverse} />
       ) : (
-        <Text style={styles.texto}>{titulo}</Text>
+        <Text style={[styles.texto, secundario && styles.textoSecundario]}>
+          {titulo.toUpperCase()}
+        </Text>
       )}
     </Pressable>
   );
@@ -42,14 +57,30 @@ export const PrimaryButton = memo(function PrimaryButton({
 
 const styles = StyleSheet.create({
   boton: {
-    backgroundColor: colors.blue,
-    borderRadius: radius.lg,
+    borderRadius: radius.md,
     paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.lg,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 50,
+    minHeight: 48,
+    borderWidth: BORDE,
   },
-  presionado: { opacity: 0.7 },
-  inactivo: { backgroundColor: colors.labelTertiary },
-  texto: { ...typography.headline, color: colors.labelInverse },
+  primario: {
+    backgroundColor: colors.acento,
+    borderColor: colors.acento,
+    ...shadow.glow,
+  },
+  secundario: {
+    backgroundColor: 'transparent',
+    borderColor: colors.separatorOpaque,
+  },
+  presionado: { opacity: 0.65 },
+  inactivo: {
+    backgroundColor: colors.fill,
+    borderColor: colors.separator,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  texto: { ...typography.headline, color: colors.labelInverse, letterSpacing: 0.8 },
+  textoSecundario: { color: colors.labelSecondary },
 });
