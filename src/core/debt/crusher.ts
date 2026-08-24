@@ -135,6 +135,22 @@ export function proyectarTrituradora(parametros: ParametrosTrituradora): Resulta
   };
 }
 
+/**
+ * Interés que se suma en UN período si no se abona nada.
+ *
+ * Existe para la deuda sin cuota fija cuando esta quincena no hay remanente
+ * libre que destinarle: "no hay nada que mostrar" es engañoso ahí, porque el
+ * saldo sigue creciendo por el interés moratorio aunque no se pague ni un
+ * colón. Esta cifra es la que hace visible ese costo de no hacer nada.
+ */
+export function interesPorPeriodo(
+  saldoActual: number,
+  tasaMensualNominal: number,
+  periodosPorMes: number = PERIODOS_POR_MES_POR_DEFECTO,
+): number {
+  return aColones(saldoActual * (tasaMensualNominal / periodosPorMes));
+}
+
 /* -------------------------------------------------------------------------- */
 /* Priorización entre varias deudas (método avalancha)                        */
 /* -------------------------------------------------------------------------- */

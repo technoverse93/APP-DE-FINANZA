@@ -46,7 +46,7 @@ export function useGastosFijosItems() {
     try {
       const { data, error: e } = await supabase
         .from('gastos_fijos_items')
-        .select('id, nombre, monto_mensual, modo, dia_nominal, fecha_diferida, vence_en, activo')
+        .select('id, nombre, monto_mensual, modo, dia_nominal, fecha_diferida, vence_en, deuda_id, activo')
         .order('creado_en', { ascending: true });
       if (e) throw e;
       setGastos(
@@ -58,6 +58,7 @@ export function useGastosFijosItems() {
           diaNominal: (g.dia_nominal as 13 | 28 | null) ?? undefined,
           fechaDiferida: (g.fecha_diferida as string | null) ?? undefined,
           venceEn: (g.vence_en as string | null) ?? undefined,
+          deudaId: (g.deuda_id as string | null) ?? undefined,
           activo: g.activo as boolean,
         })),
       );
