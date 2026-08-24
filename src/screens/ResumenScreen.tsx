@@ -15,6 +15,7 @@ import {
 // terminaba debajo de la barra de navegación del sistema.
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
+  AvisoError,
   BlurHeader,
   Card,
   DistribucionDonut,
@@ -33,6 +34,7 @@ import { useColilla } from '../state/useColilla';
 import { useLibroMayor } from '../state/useLibroMayor';
 import { useQuincena } from '../state/useQuincena';
 import { useRutasTransporte } from '../state/useRutasTransporte';
+import { useSesion } from '../state/useSesion';
 import { useTransacciones } from '../state/useTransacciones';
 import { colors, radius, spacing, typography } from '../theme';
 
@@ -72,11 +74,12 @@ function dentroDeVentana(fechaIso: string, inicio: Date, fin: Date): boolean {
 }
 
 export function ResumenScreen() {
-  const { payday, gastosFijos, guardarGastosFijos, recargar } = useQuincena();
+  const { payday, gastosFijos, error, guardarGastosFijos, recargar } = useQuincena();
   const libro = useLibroMayor();
   const rutas = useRutasTransporte();
   const transacciones = useTransacciones();
   const colilla = useColilla(payday);
+  const { sesion, cerrarSesion } = useSesion();
 
   const [sincronizando, setSincronizando] = useState(false);
   const [textoColilla, setTextoColilla] = useState('');
@@ -267,6 +270,13 @@ export function ResumenScreen() {
           keyboardShouldPersistTaps="handled"
           refreshControl={<RefreshControl refreshing={sincronizando} onRefresh={onRefresh} />}
         >
+        {/* Antes de cualquier número: si algo falló al guardar o al leer, se
+            dice acá. Un total calculado sobre datos que no se guardaron es
+            peor que un error visible. */}
+        <AvisoError
+          errores={[error, libro.error, rutas.error, transacciones.error, colilla.error]}
+        />
+
         <Card>
           <Text style={styles.etiqueta}>Ingreso disponible de esta quincena</Text>
           <Text style={styles.monto}>{formatearColones(ingresoDisponible)}</Text>
@@ -488,6 +498,20 @@ export function ResumenScreen() {
               tono={ETIQUETAS_ESTADO[distribucion.estado].tono}
               ultima
             />
+          </Card>
+        </View>
+
+        <View style={styles.seccion}>
+          <SectionHeader titulo="Cuenta" />
+          <Card>
+            <Text style={styles.etiquetaCampo}>
+              {sesion?.user.email ?? 'Sin sesión'}
+            </Text>
+            <Text style={styles.pie}>
+              Tus datos se guardan bajo esta cuenta. Si salís, la app vuelve a
+              pedir el correo y la contraseña, pero nada se borra.
+            </Text>
+            <PrimaryButton titulo="Cerrar sesión" onPress={() => void cerrarSesion()} />
           </Card>
         </View>
         </ScrollView>

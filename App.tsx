@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { BiometricGate } from './src/auth/BiometricGate';
@@ -8,6 +9,9 @@ import { programarAvisoColilla } from './src/lib/notificaciones';
 import { supabaseConfigError } from './src/lib/supabase';
 import { comprobarActualizacion } from './src/lib/updates';
 import { RootTabs } from './src/navigation/RootTabs';
+import { AuthScreen } from './src/screens/AuthScreen';
+import { useSesion } from './src/state/useSesion';
+import { colors } from './src/theme';
 
 /**
  * Raíz de la aplicación.
@@ -30,6 +34,33 @@ import { RootTabs } from './src/navigation/RootTabs';
  * de navegación del sistema — los botones de la parte baja se veían
  * cortados a la mitad y no respondían al toque en el teléfono real.
  */
+
+/**
+ * Puerta de sesión, DENTRO de la biométrica.
+ *
+ * El orden importa: la puerta biométrica es la que abre la red hacia Supabase
+ * (`desbloquearRed`), así que intentar autenticar antes de pasarla haría que
+ * toda petición se rechace con AppBloqueadaError.
+ *
+ * Sin esta puerta la app abría igual pero no podía guardar nada: los hooks
+ * identifican cada fila con `auth.getUser()` y las políticas RLS filtran por
+ * `auth.uid()`, así que sin sesión cada inserción abortaba y cada lectura
+ * devolvía vacío.
+ */
+function PuertaDeSesion() {
+  const { sesion, cargando } = useSesion();
+
+  if (cargando) {
+    return (
+      <View style={styles.centrado}>
+        <ActivityIndicator color={colors.blue} />
+      </View>
+    );
+  }
+
+  return sesion ? <RootTabs /> : <AuthScreen />;
+}
+
 export default function App() {
   useEffect(() => {
     // Ninguna de las dos debe poder impedir el arranque: si el sistema no
@@ -50,9 +81,18 @@ export default function App() {
         <BiometricGate>
           <StatusBar style="dark" />
           {supabaseConfigError ? <ConfigWarning mensaje={supabaseConfigError} /> : null}
-          <RootTabs />
+          <PuertaDeSesion />
         </BiometricGate>
       </ErrorBoundary>
     </SafeAreaProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  centrado: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.background,
+  },
+});
