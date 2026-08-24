@@ -45,6 +45,8 @@ export interface GastoFijoItem {
    * cuanto el plan termina, sin tener que borrarla a mano.
    */
   readonly venceEn?: string;
+  /** Deuda que generó este gasto, si es la cuota fija de un plan a plazo. */
+  readonly deudaId?: string;
   readonly activo: boolean;
 }
 

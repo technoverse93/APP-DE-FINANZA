@@ -26,6 +26,7 @@ import {
 } from '../components';
 import { calcularCostoOportunidad, type CostoOportunidad } from '../core/analytics/opportunityCost';
 import {
+  interesPorPeriodo,
   priorizarAbonoExtra,
   proyectarPorPorcentajeRemanente,
   proyectarTrituradora,
@@ -208,6 +209,30 @@ export function DeudasScreen() {
   const montoDestinado = Math.round(remanenteLibre * (porcentajeActivo / 100));
 
   const tieneCuotaLaDeudaSeleccionada = (deudaSeleccionada?.abonoObjetivo ?? 0) > 0;
+
+  /** El gasto fijo que esta deuda generó automáticamente al registrarse con
+   * cuota fija, si lo tiene — es lo que permite confirmarle al usuario que
+   * esa cuota YA se está contando en el presupuesto, sin que tenga que ir a
+   * buscarlo a la otra pantalla para comprobarlo. */
+  const cuotaVinculada = useMemo(
+    () =>
+      deudaSeleccionada
+        ? q.gastosFijosItems.gastos.find((g) => g.deudaId === deudaSeleccionada.id) ?? null
+        : null,
+    [deudaSeleccionada, q.gastosFijosItems.gastos],
+  );
+
+  /** Interés que se sigue sumando esta quincena si no se le destina nada —
+   * la cifra que explica por qué "sin remanente" no es lo mismo que "no pasa
+   * nada": el saldo de una deuda sin cuota fija crece igual por el interés
+   * moratorio. */
+  const interesSinAbonar = useMemo(
+    () =>
+      deudaSeleccionada && !tieneCuotaLaDeudaSeleccionada
+        ? interesPorPeriodo(deudaSeleccionada.saldoActual, deudaSeleccionada.tasaMensual)
+        : 0,
+    [deudaSeleccionada, tieneCuotaLaDeudaSeleccionada],
+  );
 
   /** Plan de pago con SOLO la cuota fija, sin remanente extra — la primera
    * de las dos posibilidades que hay que mostrar cuando la deuda tiene
@@ -551,6 +576,14 @@ export function DeudasScreen() {
                 deuda no se termina de pagar así. Necesita remanente extra o renegociar la cuota.
               </Text>
             ) : null}
+            {cuotaVinculada ? (
+              <Text style={styles.ayuda}>
+                Esta cuota ({formatearColones(cuotaVinculada.montoMensual)}/mes) ya está anotada
+                como gasto fijo
+                {cuotaVinculada.venceEn ? ` hasta el ${fechaLegible(new Date(`${cuotaVinculada.venceEn}T00:00:00Z`))}` : ''}
+                : se descuenta sola del presupuesto, no hace falta anotarla aparte.
+              </Text>
+            ) : null}
           </View>
         ) : null}
 
@@ -607,9 +640,20 @@ export function DeudasScreen() {
         ) : deudaSeleccionada ? (
           <View style={styles.seccion}>
             <SectionHeader titulo="Proyección" />
-            <Text style={styles.mensajeVacio}>
-              Esta quincena no hay remanente libre y esta deuda no tiene cuota fija: todavía no
-              hay nada que destinarle. En cuanto haya remanente, elegí un porcentaje arriba.
+            <Card sinRelleno>
+              <ListRow
+                titulo="Interés que se suma esta quincena"
+                detalle="Sin abono, esto se acumula igual al saldo"
+                valor={formatearColones(interesSinAbonar)}
+                tono="negativo"
+                ultima
+              />
+            </Card>
+            <Text style={styles.avisoDeuda}>
+              Esta quincena no hay remanente libre para destinarle: todavía no hay nada que
+              abonarle. Ojo: pagar tus gastos fijos normales (alquiler del mes, servicios, etc.) no
+              abona nada a esta deuda — son cosas separadas, y mientras tanto el interés de arriba
+              se sigue sumando solo. En cuanto haya remanente, elegí un porcentaje arriba.
             </Text>
           </View>
         ) : null}

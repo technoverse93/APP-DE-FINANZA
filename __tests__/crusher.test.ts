@@ -2,6 +2,7 @@ import {
   proyectarTrituradora,
   proyectarPorPorcentajeRemanente,
   priorizarAbonoExtra,
+  interesPorPeriodo,
   RemanenteInsuficienteError,
   PERIODOS_POR_MES_POR_DEFECTO,
 } from '../src/core/debt/crusher';
@@ -191,5 +192,19 @@ describe('proyectarPorPorcentajeRemanente', () => {
     const p = proyectarPorPorcentajeRemanente(5_000_000, 0.6, 1_000, 100, new Date());
     expect(p?.resultado.saldado).toBe(false);
     expect(p?.fechaSaldoCero).toBeNull();
+  });
+});
+
+describe('interesPorPeriodo', () => {
+  it('con 2 períodos por mes por defecto, es la mitad de la tasa mensual sobre el saldo', () => {
+    expect(interesPorPeriodo(300_000, 0.02)).toBe(3_000);
+  });
+
+  it('refleja una tasa moratoria alta, como la de un alquiler atrasado', () => {
+    expect(interesPorPeriodo(300_000, 0.5586)).toBe(83_790);
+  });
+
+  it('con saldo cero, no hay interés que se acumule', () => {
+    expect(interesPorPeriodo(0, 0.5586)).toBe(0);
   });
 });

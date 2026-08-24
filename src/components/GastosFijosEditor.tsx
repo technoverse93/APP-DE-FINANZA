@@ -95,6 +95,13 @@ export const GastosFijosEditor = memo(function GastosFijosEditor({
   const [diaNominal, setDiaNominal] = useState<13 | 28>(FORMULARIO_VACIO.diaNominal);
   const [fechaDiferida, setFechaDiferida] = useState(FORMULARIO_VACIO.fechaDiferida);
   const [aviso, setAviso] = useState<string | null>(null);
+  // No hay campos de formulario para esto: son datos que trae un gasto
+  // creado automáticamente al registrar una deuda con cuota fija. Si el
+  // "Guardar cambios" de una edición no los reenvía tal cual, el gasto queda
+  // huérfano (pierde el vínculo con su deuda) y sin vencimiento (queda
+  // cobrando para siempre, aunque el plazo ya haya terminado).
+  const [venceEnEdicion, setVenceEnEdicion] = useState<string | undefined>(undefined);
+  const [deudaIdEdicion, setDeudaIdEdicion] = useState<string | undefined>(undefined);
 
   const limpiarFormulario = useCallback(() => {
     setEditandoId(null);
@@ -103,6 +110,8 @@ export const GastosFijosEditor = memo(function GastosFijosEditor({
     setModo(FORMULARIO_VACIO.modo);
     setDiaNominal(FORMULARIO_VACIO.diaNominal);
     setFechaDiferida(FORMULARIO_VACIO.fechaDiferida);
+    setVenceEnEdicion(undefined);
+    setDeudaIdEdicion(undefined);
     setAviso(null);
   }, []);
 
@@ -113,6 +122,8 @@ export const GastosFijosEditor = memo(function GastosFijosEditor({
     setModo(gasto.modo);
     setDiaNominal(gasto.diaNominal ?? 13);
     setFechaDiferida(gasto.fechaDiferida ?? '');
+    setVenceEnEdicion(gasto.venceEn);
+    setDeudaIdEdicion(gasto.deudaId);
     setAviso(null);
   }, []);
 
@@ -136,6 +147,8 @@ export const GastosFijosEditor = memo(function GastosFijosEditor({
       modo,
       diaNominal: modo === 'quincena_fija' ? diaNominal : undefined,
       fechaDiferida: modo === 'diferido' ? fechaDiferida : undefined,
+      venceEn: venceEnEdicion,
+      deudaId: deudaIdEdicion,
     };
     if (editandoId) {
       onActualizar(editandoId, entrada);
@@ -143,7 +156,19 @@ export const GastosFijosEditor = memo(function GastosFijosEditor({
       onCrear(entrada);
     }
     limpiarFormulario();
-  }, [nombre, textoMonto, modo, diaNominal, fechaDiferida, editandoId, onCrear, onActualizar, limpiarFormulario]);
+  }, [
+    nombre,
+    textoMonto,
+    modo,
+    diaNominal,
+    fechaDiferida,
+    venceEnEdicion,
+    deudaIdEdicion,
+    editandoId,
+    onCrear,
+    onActualizar,
+    limpiarFormulario,
+  ]);
 
   const eliminarEnEdicion = useCallback(() => {
     if (!editandoId) return;
@@ -169,7 +194,7 @@ export const GastosFijosEditor = memo(function GastosFijosEditor({
                     : g.modo === 'quincena_fija'
                       ? `solo el ${g.diaNominal}`
                       : `pospuesto al ${g.fechaDiferida}`
-                } · tocar para editar`}
+                }${g.deudaId ? ' · cuota fija de una deuda' : ''} · tocar para editar`}
                 valor={formatearColones(enEsta)}
                 tono={g.id === editandoId ? 'atencion' : enEsta > 0 ? 'normal' : 'atencion'}
                 onPress={() => empezarEdicion(g)}
