@@ -5,6 +5,7 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -24,8 +25,13 @@ import {
   type SerieAmortizacion,
 } from '../components';
 import { calcularCostoOportunidad, type CostoOportunidad } from '../core/analytics/opportunityCost';
-import { priorizarAbonoExtra, proyectarPorPorcentajeRemanente } from '../core/debt/crusher';
+import {
+  priorizarAbonoExtra,
+  proyectarPorPorcentajeRemanente,
+  proyectarTrituradora,
+} from '../core/debt/crusher';
 import { formatearColones } from '../core/payroll/distribution';
+import { avanzarNPeriodos } from '../core/payroll/schedule';
 import { googleAuthConfigurado } from '../lib/googleAuth';
 import { type Deuda, useDeudas } from '../state/useDeudas';
 import { useDistribucionQuincena } from '../state/useDistribucionQuincena';
@@ -99,12 +105,17 @@ export function DeudasScreen() {
   const [nombreDeuda, setNombreDeuda] = useState('');
   const [textoSaldo, setTextoSaldo] = useState('');
   const [textoTasa, setTextoTasa] = useState('');
+  // La cuota fija es opcional: una deuda como un alquiler atrasado puede no
+  // tener pago mínimo pactado, solo interés moratorio que corre sobre el
+  // saldo. Sin este interruptor, el alta obligaba a inventar un monto de
+  // cuota que esa deuda no tiene.
+  const [tieneCuotaFija, setTieneCuotaFija] = useState(false);
   const [textoAbonoObjetivo, setTextoAbonoObjetivo] = useState('');
+  const [textoPlazo, setTextoPlazo] = useState('');
   const [avisoDeuda, setAvisoDeuda] = useState<string | null>(null);
 
-  const agregarDeuda = useCallback(() => {
+  const agregarDeuda = useCallback(async () => {
     const saldo = limpiarMonto(textoSaldo);
-    const abono = limpiarMonto(textoAbonoObjetivo);
     // La tasa se escribe como porcentaje MENSUAL ("2") porque es como viene
     // en el estado de cuenta; el motor la quiere como fracción (0.02).
     const tasaPorciento = Number(textoTasa.replace(',', '.').replace(/[^\d.]/g, ''));
@@ -116,22 +127,46 @@ export function DeudasScreen() {
       setAvisoDeuda('Escribí la tasa mensual como número, por ejemplo 2 para 2%.');
       return;
     }
-    if (abono <= 0) {
-      setAvisoDeuda('Poné cuánto pagás de mínimo por quincena según el contrato.');
+
+    const abono = tieneCuotaFija ? limpiarMonto(textoAbonoObjetivo) : 0;
+    const plazo = tieneCuotaFija ? limpiarMonto(textoPlazo) : 0;
+    if (tieneCuotaFija && (abono <= 0 || plazo <= 0)) {
+      setAvisoDeuda('Con cuota fija, poné cuánto pagás por quincena y el plazo estimado en quincenas.');
       return;
     }
+
     setAvisoDeuda(null);
-    void deudasHook.guardar({
+    const nuevoId = await deudasHook.guardar({
       nombre: nombreDeuda.trim(),
       saldoActual: saldo,
       tasaMensual: tasaPorciento / 100,
       abonoObjetivo: abono,
+      plazoQuincenas: tieneCuotaFija ? plazo : null,
     });
+
+    // Con cuota fija, esa cuota es un compromiso real del presupuesto —no un
+    // abono opcional del remanente— así que se registra como gasto fijo
+    // mientras dure el plazo. `modo: 'mitades'` con el doble del monto
+    // reproduce "la misma cuota en las dos quincenas del mes", que es
+    // justamente lo que pide una cuota fija quincenal.
+    if (nuevoId && tieneCuotaFija) {
+      const venceEn = avanzarNPeriodos(q.payday.date, plazo).toISOString().slice(0, 10);
+      void q.gastosFijosItems.crear({
+        nombre: `Cuota: ${nombreDeuda.trim()}`,
+        montoMensual: abono * 2,
+        modo: 'mitades',
+        venceEn,
+        deudaId: nuevoId,
+      });
+    }
+
     setNombreDeuda('');
     setTextoSaldo('');
     setTextoTasa('');
+    setTieneCuotaFija(false);
     setTextoAbonoObjetivo('');
-  }, [nombreDeuda, textoSaldo, textoTasa, textoAbonoObjetivo, deudasHook]);
+    setTextoPlazo('');
+  }, [nombreDeuda, textoSaldo, textoTasa, tieneCuotaFija, textoAbonoObjetivo, textoPlazo, deudasHook, q]);
 
   const agregarMovimiento = useCallback(() => {
     const monto = limpiarMonto(textoMontoLibro);
@@ -172,6 +207,31 @@ export function DeudasScreen() {
 
   const montoDestinado = Math.round(remanenteLibre * (porcentajeActivo / 100));
 
+  const tieneCuotaLaDeudaSeleccionada = (deudaSeleccionada?.abonoObjetivo ?? 0) > 0;
+
+  /** Plan de pago con SOLO la cuota fija, sin remanente extra — la primera
+   * de las dos posibilidades que hay que mostrar cuando la deuda tiene
+   * cuota pactada. */
+  const proyeccionSoloCuota = useMemo(() => {
+    if (!deudaSeleccionada || !tieneCuotaLaDeudaSeleccionada || deudaSeleccionada.saldoActual <= 0) {
+      return null;
+    }
+    const resultado = proyectarTrituradora({
+      saldoInicial: deudaSeleccionada.saldoActual,
+      tasaMensualNominal: deudaSeleccionada.tasaMensual,
+      abonoPorPeriodo: deudaSeleccionada.abonoObjetivo,
+    });
+    return {
+      resultado,
+      fechaSaldoCero: resultado.saldado
+        ? avanzarNPeriodos(new Date(), resultado.periodosParaSaldar)
+        : null,
+    };
+  }, [deudaSeleccionada, tieneCuotaLaDeudaSeleccionada]);
+
+  /** Segunda posibilidad: la cuota fija (si la hay) más el porcentaje del
+   * remanente libre elegido. Para una deuda sin cuota, esto es 100% lo que
+   * ya mostraba el selector de porcentaje — no cambia nada para esas. */
   const proyeccionPorcentaje = useMemo(() => {
     if (!deudaSeleccionada || deudaSeleccionada.saldoActual <= 0) return null;
     return proyectarPorPorcentajeRemanente(
@@ -180,6 +240,7 @@ export function DeudasScreen() {
       remanenteLibre,
       porcentajeActivo,
       new Date(),
+      deudaSeleccionada.abonoObjetivo,
     );
   }, [deudaSeleccionada, remanenteLibre, porcentajeActivo]);
 
@@ -188,14 +249,22 @@ export function DeudasScreen() {
     if (!proyeccionPorcentaje) return [];
     const periodos = proyeccionPorcentaje.resultado.periodos;
     if (periodos.length === 0) return [];
-    return [
-      {
-        etiqueta: `${porcentajeActivo}% del remanente (${formatearColones(proyeccionPorcentaje.abonoPorPeriodo)}/quincena)`,
-        color: colors.acento,
-        saldos: [periodos[0]!.saldoInicial, ...periodos.map((p) => p.saldoFinal)],
-      },
-    ];
-  }, [proyeccionPorcentaje, porcentajeActivo]);
+    const series: SerieAmortizacion[] = [];
+    if (proyeccionSoloCuota && proyeccionSoloCuota.resultado.periodos.length > 0) {
+      const p = proyeccionSoloCuota.resultado.periodos;
+      series.push({
+        etiqueta: `Solo cuota (${formatearColones(deudaSeleccionada!.abonoObjetivo)}/quincena)`,
+        color: colors.labelTertiary,
+        saldos: [p[0]!.saldoInicial, ...p.map((x) => x.saldoFinal)],
+      });
+    }
+    series.push({
+      etiqueta: `${formatearColones(proyeccionPorcentaje.abonoPorPeriodo)}/quincena (${porcentajeActivo}% del remanente)`,
+      color: colors.acento,
+      saldos: [periodos[0]!.saldoInicial, ...periodos.map((p) => p.saldoFinal)],
+    });
+    return series;
+  }, [proyeccionPorcentaje, proyeccionSoloCuota, porcentajeActivo, deudaSeleccionada]);
 
   /** Cómo repartir el monto destinado entre TODAS las deudas (método
    * avalancha): solo tiene sentido mostrarlo con dos o más deudas — con una
@@ -211,7 +280,7 @@ export function DeudasScreen() {
   const recargarTodo = useCallback(() => {
     void libro.recargar();
     void deudasHook.recargar();
-    void q.recargar();
+    void q.gastosFijosItems.recargar();
   }, [libro, deudasHook, q]);
 
   return (
@@ -230,7 +299,7 @@ export function DeudasScreen() {
           keyboardShouldPersistTaps="handled"
           refreshControl={<RefreshControl refreshing={refrescando} onRefresh={recargarTodo} />}
         >
-        <AvisoError errores={[libro.error, deudasHook.error, q.error, q.gastosFijosItems.error]} />
+        <AvisoError errores={[libro.error, deudasHook.error, q.gastosFijosItems.error]} />
 
         {googleAuthConfigurado ? (
           <View style={styles.seccion}>
@@ -345,6 +414,9 @@ export function DeudasScreen() {
                   <Text style={styles.etiquetaCampo}>
                     Saldo {formatearColones(deudaSeleccionada.saldoActual)} · Tasa{' '}
                     {(deudaSeleccionada.tasaMensual * 100).toFixed(1)}% mensual
+                    {tieneCuotaLaDeudaSeleccionada
+                      ? ` · Cuota ${formatearColones(deudaSeleccionada.abonoObjetivo)}/quincena`
+                      : ' · Sin cuota fija'}
                   </Text>
                 ) : null}
 
@@ -352,8 +424,9 @@ export function DeudasScreen() {
                   Remanente libre de esta quincena: {formatearColones(remanenteLibre)}
                 </Text>
                 <Text style={styles.ayuda}>
-                  No es una cuota fija: es lo que sobra hoy por encima de tu banda de seguridad.
-                  Elegí qué parte destinás a esta deuda.
+                  {tieneCuotaLaDeudaSeleccionada
+                    ? 'Esto es lo que le sumás de más a tu cuota, no lo que la reemplaza.'
+                    : 'No es una cuota fija: es lo que sobra hoy por encima de tu banda de seguridad.'}
                 </Text>
 
                 <View style={styles.filaTipo}>
@@ -395,7 +468,7 @@ export function DeudasScreen() {
               style={styles.input}
               value={nombreDeuda}
               onChangeText={setNombreDeuda}
-              placeholder="Nombre (ej. Tarjeta BAC, Préstamo)"
+              placeholder="Nombre (ej. Tarjeta BAC, Alquiler atrasado)"
               placeholderTextColor={colors.labelTertiary}
             />
             <TextInput
@@ -411,29 +484,93 @@ export function DeudasScreen() {
               value={textoTasa}
               onChangeText={setTextoTasa}
               keyboardType="decimal-pad"
-              placeholder="Tasa mensual en % (ej. 2)"
+              placeholder="Tasa mensual en % (ej. 2, o la moratoria)"
               placeholderTextColor={colors.labelTertiary}
             />
-            <TextInput
-              style={styles.input}
-              value={textoAbonoObjetivo}
-              onChangeText={setTextoAbonoObjetivo}
-              keyboardType="number-pad"
-              placeholder="Pago mínimo del contrato por quincena"
-              placeholderTextColor={colors.labelTertiary}
-            />
+
+            <View style={styles.filaSwitch}>
+              <View style={styles.textoSwitch}>
+                <Text style={styles.etiquetaCampo}>¿Tiene cuota fija?</Text>
+                <Text style={styles.ayuda}>
+                  {tieneCuotaFija
+                    ? 'La cuota se descuenta como gasto fijo mientras dure el plazo.'
+                    : 'Apagalo si solo acumula interés, sin pago mínimo pactado (ej. un alquiler atrasado). Se paga con el remanente libre que le destines.'}
+                </Text>
+              </View>
+              <Switch
+                value={tieneCuotaFija}
+                onValueChange={setTieneCuotaFija}
+                trackColor={{ true: colors.acento, false: colors.fill }}
+                thumbColor={colors.label}
+              />
+            </View>
+
+            {tieneCuotaFija ? (
+              <>
+                <TextInput
+                  style={styles.input}
+                  value={textoAbonoObjetivo}
+                  onChangeText={setTextoAbonoObjetivo}
+                  keyboardType="number-pad"
+                  placeholder="Cuota por quincena"
+                  placeholderTextColor={colors.labelTertiary}
+                />
+                <TextInput
+                  style={styles.input}
+                  value={textoPlazo}
+                  onChangeText={setTextoPlazo}
+                  keyboardType="number-pad"
+                  placeholder="Plazo estimado (en quincenas)"
+                  placeholderTextColor={colors.labelTertiary}
+                />
+              </>
+            ) : null}
+
             {avisoDeuda ? <Text style={styles.avisoDeuda}>{avisoDeuda}</Text> : null}
-            <PrimaryButton titulo="Guardar deuda" onPress={agregarDeuda} />
+            <PrimaryButton titulo="Guardar deuda" onPress={() => void agregarDeuda()} />
           </View>
         </View>
 
+        {proyeccionSoloCuota ? (
+          <View style={styles.seccion}>
+            <SectionHeader titulo="Solo con tu cuota fija" />
+            <Card sinRelleno>
+              <ListRow
+                titulo="Fecha en que quedás libre"
+                valor={fechaLegible(proyeccionSoloCuota.fechaSaldoCero)}
+              />
+              <ListRow
+                titulo="Intereses totales a pagar"
+                valor={formatearColones(proyeccionSoloCuota.resultado.totalInteresPagado)}
+                ultima
+              />
+            </Card>
+            {!proyeccionSoloCuota.resultado.saldado ? (
+              <Text style={styles.avisoDeuda}>
+                Con solo la cuota pactada, el interés crece más rápido de lo que abonás: esta
+                deuda no se termina de pagar así. Necesita remanente extra o renegociar la cuota.
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
+
         {proyeccionPorcentaje ? (
           <View style={styles.seccion}>
-            <SectionHeader titulo={`Proyección con ${porcentajeActivo}% del remanente`} />
+            <SectionHeader
+              titulo={
+                tieneCuotaLaDeudaSeleccionada
+                  ? `Cuota + ${porcentajeActivo}% del remanente`
+                  : `Proyección con ${porcentajeActivo}% del remanente`
+              }
+            />
             <Card sinRelleno>
               <ListRow
                 titulo="Abono por quincena"
-                detalle="Remanente libre × porcentaje elegido"
+                detalle={
+                  tieneCuotaLaDeudaSeleccionada
+                    ? 'Cuota fija + remanente × porcentaje elegido'
+                    : 'Remanente libre × porcentaje elegido'
+                }
                 valor={formatearColones(proyeccionPorcentaje.abonoPorPeriodo)}
               />
               <ListRow
@@ -467,12 +604,12 @@ export function DeudasScreen() {
               </Card>
             ) : null}
           </View>
-        ) : deudaSeleccionada && remanenteLibre <= 0 ? (
+        ) : deudaSeleccionada ? (
           <View style={styles.seccion}>
             <SectionHeader titulo="Proyección" />
             <Text style={styles.mensajeVacio}>
-              Esta quincena no hay remanente libre: todo el disponible se queda en la banda de
-              seguridad. Sin remanente no hay nada que destinar a la deuda todavía.
+              Esta quincena no hay remanente libre y esta deuda no tiene cuota fija: todavía no
+              hay nada que destinarle. En cuanto haya remanente, elegí un porcentaje arriba.
             </Text>
           </View>
         ) : null}
@@ -491,7 +628,7 @@ export function DeudasScreen() {
                   <ListRow
                     key={asig.deudaId}
                     titulo={deuda?.nombre ?? asig.deudaId}
-                    detalle={`Mínimo del contrato ${formatearColones(deuda?.abonoObjetivo ?? 0)} + remanente ${formatearColones(asig.abonoExtraAsignado)}`}
+                    detalle={`Cuota fija ${formatearColones(deuda?.abonoObjetivo ?? 0)} + remanente ${formatearColones(asig.abonoExtraAsignado)}`}
                     valor={formatearColones(asig.abonoTotal)}
                     tono={asig.abonoExtraAsignado > 0 ? 'positivo' : 'normal'}
                     ultima={i === asignacionAvalancha.length - 1}
@@ -520,6 +657,13 @@ const styles = StyleSheet.create({
   etiquetaCampo: { ...typography.footnote, color: colors.labelSecondary },
   ayuda: { ...typography.caption1, color: colors.labelTertiary },
   formularioDeuda: { gap: spacing.sm, marginTop: spacing.md },
+  filaSwitch: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.xs,
+  },
+  textoSwitch: { flex: 1, gap: 2 },
   tarjetaGrafico: { marginTop: spacing.md },
   avisoDeuda: {
     ...typography.footnote,

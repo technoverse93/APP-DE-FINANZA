@@ -33,7 +33,7 @@ import {
   type RubroTermometro,
   type SegmentoDonut,
 } from '../components';
-import { formatearColones, type GastosFijos } from '../core/payroll/distribution';
+import { formatearColones } from '../core/payroll/distribution';
 import type { DeudaSimulada } from '../core/payroll/simulador';
 import { useDeudas } from '../state/useDeudas';
 import { useDistribucionQuincena } from '../state/useDistribucionQuincena';
@@ -87,11 +87,6 @@ export function ResumenScreen() {
 
   const [textoColilla, setTextoColilla] = useState('');
 
-  const [editandoGastos, setEditandoGastos] = useState(false);
-  const [textoCasa, setTextoCasa] = useState('');
-  const [textoComida, setTextoComida] = useState('');
-  const [textoDeudaBase, setTextoDeudaBase] = useState('');
-
   const [textoOrigen, setTextoOrigen] = useState('');
   const [textoDestino, setTextoDestino] = useState('');
   const [textoPrecioTramo, setTextoPrecioTramo] = useState('');
@@ -100,27 +95,6 @@ export function ResumenScreen() {
   // ruta recurrente: se anota como gasto variable del día y no vuelve a
   // pesar en las quincenas siguientes.
   const [esOcasional, setEsOcasional] = useState(false);
-
-  const empezarEdicionGastos = useCallback(() => {
-    setTextoCasa(String(q.gastosFijos.casa));
-    setTextoComida(String(q.gastosFijos.comida));
-    setTextoDeudaBase(String(q.gastosFijos.deudaBase));
-    setEditandoGastos(true);
-  }, [q.gastosFijos]);
-
-  const guardarGastos = useCallback(() => {
-    const siguiente: GastosFijos = {
-      casa: limpiarMonto(textoCasa),
-      comida: limpiarMonto(textoComida),
-      // El transporte ya no vive acá: lo calcula la sección "Rutas de
-      // transporte" a partir de los tramos. Se conserva en 0 para no romper
-      // la columna `pases` ya guardada de instalaciones anteriores.
-      pases: 0,
-      deudaBase: limpiarMonto(textoDeudaBase),
-    };
-    void q.guardarGastosFijos(siguiente);
-    setEditandoGastos(false);
-  }, [textoCasa, textoComida, textoDeudaBase, q]);
 
   const agregarTramo = useCallback(() => {
     const precio = limpiarMonto(textoPrecioTramo);
@@ -286,7 +260,6 @@ export function ResumenScreen() {
             peor que un error visible. */}
         <AvisoError
           errores={[
-            q.error,
             q.libro.error,
             q.rutas.error,
             q.transacciones.error,
@@ -493,60 +466,6 @@ export function ResumenScreen() {
         </View>
 
         <View style={styles.seccion}>
-          <SectionHeader
-            titulo="Casa, comida y deuda base"
-            accion={editandoGastos ? undefined : 'Editar'}
-            onAccionPress={empezarEdicionGastos}
-          />
-          <Card sinRelleno={!editandoGastos}>
-            {editandoGastos ? (
-              <View style={styles.formulario}>
-                <Text style={styles.etiquetaCampo}>Casa</Text>
-                <TextInput
-                  style={styles.inputGasto}
-                  value={textoCasa}
-                  onChangeText={setTextoCasa}
-                  keyboardType="number-pad"
-                  placeholderTextColor={colors.labelTertiary}
-                />
-                <Text style={styles.etiquetaCampo}>Comida</Text>
-                <TextInput
-                  style={styles.inputGasto}
-                  value={textoComida}
-                  onChangeText={setTextoComida}
-                  keyboardType="number-pad"
-                  placeholderTextColor={colors.labelTertiary}
-                />
-                <Text style={styles.etiquetaCampo}>Deuda base</Text>
-                <TextInput
-                  style={styles.inputGasto}
-                  value={textoDeudaBase}
-                  onChangeText={setTextoDeudaBase}
-                  keyboardType="number-pad"
-                  placeholderTextColor={colors.labelTertiary}
-                />
-                <PrimaryButton titulo="Guardar gastos fijos" onPress={guardarGastos} />
-              </View>
-            ) : (
-              <>
-                <ListRow titulo="Casa" valor={formatearColones(q.gastosFijos.casa)} onPress={empezarEdicionGastos} />
-                <ListRow
-                  titulo="Comida"
-                  valor={formatearColones(q.gastosFijos.comida)}
-                  onPress={empezarEdicionGastos}
-                />
-                <ListRow
-                  titulo="Deuda base"
-                  valor={formatearColones(q.gastosFijos.deudaBase)}
-                  onPress={empezarEdicionGastos}
-                  ultima
-                />
-              </>
-            )}
-          </Card>
-        </View>
-
-        <View style={styles.seccion}>
           <SectionHeader titulo="Distribución" />
           <Card style={styles.tarjetaDonut}>
             <DistribucionDonut segmentos={segmentosDistribucion} />
@@ -613,7 +532,6 @@ const styles = StyleSheet.create({
     padding: spacing.md,
   },
   avisoTexto: { ...typography.footnote, color: colors.label },
-  formulario: { gap: spacing.lg },
   formularioTramo: { gap: spacing.sm, marginTop: spacing.sm },
   formularioColilla: { gap: spacing.md, marginTop: spacing.md },
   filaCampos: { flexDirection: 'row', gap: spacing.sm },

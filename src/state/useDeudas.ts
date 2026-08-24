@@ -8,7 +8,16 @@ export interface Deuda {
   /** Tasa nominal MENSUAL, ej. 0.02 para 2% mensual — así viene publicada en
    * un estado de cuenta costarricense. */
   readonly tasaMensual: number;
+  /**
+   * Cuota mínima por quincena, si la deuda tiene un plan fijo. `0` significa
+   * que no hay cuota: son deudas que solo acumulan interés (por ejemplo un
+   * alquiler atrasado), sin un pago mínimo pactado, y se pagan enteramente
+   * con el porcentaje de remanente libre que el usuario elija destinarles.
+   */
   readonly abonoObjetivo: number;
+  /** Duración estimada del plan de cuota fija, en quincenas. Solo tiene
+   * sentido cuando `abonoObjetivo` es mayor a cero. */
+  readonly plazoQuincenas: number | null;
 }
 
 /** Deudas reales (saldo + tasa) en `deudas`, para alimentar la Trituradora. */
@@ -23,7 +32,7 @@ export function useDeudas() {
     try {
       const { data, error: e } = await supabase
         .from('deudas')
-        .select('id, nombre, saldo_actual, tasa_mensual, abono_objetivo')
+        .select('id, nombre, saldo_actual, tasa_mensual, abono_objetivo, plazo_quincenas')
         .order('creada_en', { ascending: true });
       if (e) throw e;
       setDeudas(
@@ -33,6 +42,7 @@ export function useDeudas() {
           saldoActual: Number(d.saldo_actual),
           tasaMensual: Number(d.tasa_mensual),
           abonoObjetivo: Number(d.abono_objetivo),
+          plazoQuincenas: d.plazo_quincenas === null ? null : Number(d.plazo_quincenas),
         })),
       );
     } catch (e) {
@@ -47,26 +57,40 @@ export function useDeudas() {
   }, [cargar]);
 
   const guardar = useCallback(
-    async (deuda: { nombre: string; saldoActual: number; tasaMensual: number; abonoObjetivo: number }) => {
+    async (deuda: {
+      nombre: string;
+      saldoActual: number;
+      tasaMensual: number;
+      /** 0 (u omitido) si la deuda no tiene cuota fija. */
+      abonoObjetivo?: number;
+      /** Solo cuando `abonoObjetivo` es mayor a cero. */
+      plazoQuincenas?: number | null;
+    }) => {
       const {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) {
         setError('No hay sesión activa: no se puede guardar la deuda');
-        return;
+        return null;
       }
-      const { error: e } = await supabase.from('deudas').insert({
-        usuario_id: user.id,
-        nombre: deuda.nombre,
-        saldo_actual: deuda.saldoActual,
-        tasa_mensual: deuda.tasaMensual,
-        abono_objetivo: deuda.abonoObjetivo,
-      });
+      const { data, error: e } = await supabase
+        .from('deudas')
+        .insert({
+          usuario_id: user.id,
+          nombre: deuda.nombre,
+          saldo_actual: deuda.saldoActual,
+          tasa_mensual: deuda.tasaMensual,
+          abono_objetivo: deuda.abonoObjetivo ?? 0,
+          plazo_quincenas: deuda.abonoObjetivo ? (deuda.plazoQuincenas ?? null) : null,
+        })
+        .select('id')
+        .single();
       if (e) {
         setError(e.message);
-        return;
+        return null;
       }
       await cargar();
+      return data.id as string;
     },
     [cargar],
   );

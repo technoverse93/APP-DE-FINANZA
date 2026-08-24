@@ -204,18 +204,23 @@ export interface ProyeccionPorPorcentaje {
 }
 
 /**
- * Proyecta la deuda cuando el abono por período NO es una cuota fija
- * predefinida, sino un porcentaje del remanente libre real de la quincena
- * (lo que sobra por encima de la banda de seguridad, ver
- * `core/payroll/distribution.ts`). Es el modelo "qué pasa si destino el 50%
- * de mi remanente a esta deuda", que se recalcula solo cuando cambia el
- * remanente real o el porcentaje elegido — no hay ningún mínimo mensual
- * grabado en la deuda que este cálculo tenga que respetar.
+ * Proyecta la deuda cuando el abono por período no depende de una cuota
+ * fija que haya que respetar tal cual, sino de un porcentaje del remanente
+ * libre real de la quincena (lo que sobra por encima de la banda de
+ * seguridad, ver `core/payroll/distribution.ts`).
  *
- * Un remanente libre de cero o negativo (la quincena está ajustada o en
- * déficit) no tiene nada que asignar: se devuelve sin proyección en vez de
- * forzar `proyectarTrituradora` con un abono de cero, que lanzaría un error
- * en vez de decir con claridad "hoy no hay remanente".
+ * `abonoBase` es la cuota fija de la deuda, si la tiene (0 para una deuda
+ * que solo acumula interés, como un alquiler atrasado sin pago mínimo
+ * pactado). El porcentaje del remanente se SUMA sobre esa base, no la
+ * reemplaza: así una deuda con cuota fija puede seguir mostrando "esto es
+ * lo que ya pagás, y esto es cuánto adelantás si además destinás tu
+ * remanente libre", mientras que una sin cuota (`abonoBase` en 0) queda
+ * financiada enteramente por el remanente, que es el modelo "qué pasa si
+ * destino el 50% de mi remanente a esta deuda".
+ *
+ * Solo devuelve `null` cuando no hay NADA que abonar — ni cuota fija ni
+ * remanente asignado —, porque ahí sí `proyectarTrituradora` rechazaría un
+ * abono de cero en vez de decir con claridad "hoy no hay nada que pagar".
  */
 export function proyectarPorPorcentajeRemanente(
   saldoInicial: number,
@@ -223,9 +228,13 @@ export function proyectarPorPorcentajeRemanente(
   remanenteLibre: number,
   porcentaje: number,
   fechaInicio: Date,
+  abonoBase = 0,
 ): ProyeccionPorPorcentaje | null {
-  if (!Number.isFinite(porcentaje) || porcentaje <= 0) return null;
-  const abonoPorPeriodo = aColones(Math.max(0, remanenteLibre) * (porcentaje / 100));
+  const abonoExtra =
+    Number.isFinite(porcentaje) && porcentaje > 0
+      ? aColones(Math.max(0, remanenteLibre) * (porcentaje / 100))
+      : 0;
+  const abonoPorPeriodo = Math.max(0, aColones(abonoBase)) + abonoExtra;
   if (abonoPorPeriodo <= 0) return null;
 
   const resultado = proyectarTrituradora({ saldoInicial, tasaMensualNominal, abonoPorPeriodo });
