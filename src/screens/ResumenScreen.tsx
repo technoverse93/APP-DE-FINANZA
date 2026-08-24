@@ -21,11 +21,16 @@ import {
   DistribucionDonut,
   GastosFijosEditor,
   GraficoBarrasFlujo,
+  GraficoTendencia,
   ListRow,
   PrimaryButton,
+  RejillaDatos,
   SectionHeader,
   SimuladorCard,
+  Termometro,
   type BarraFlujo,
+  type CeldaDato,
+  type RubroTermometro,
   type SegmentoDonut,
 } from '../components';
 import { debePedirColilla, fechaAvisoColilla } from '../core/payroll/colilla';
@@ -34,7 +39,10 @@ import { totalEnQuincena } from '../core/payroll/gastosFijos';
 import { calcularIngresoDisponible } from '../core/payroll/ingresoDisponible';
 import { previousPayday } from '../core/payroll/schedule';
 import type { ContextoQuincena, DeudaSimulada } from '../core/payroll/simulador';
-import { calcularCostoTransporteProyectado } from '../core/payroll/transporte';
+import {
+  calcularCostoTransporteProyectado,
+  diasHabilesTransporte,
+} from '../core/payroll/transporte';
 import { pedirSincronizacion } from '../lib/backgroundSync';
 import { useColilla } from '../state/useColilla';
 import { useDeudas } from '../state/useDeudas';
@@ -66,6 +74,13 @@ const ETIQUETAS_ESTADO = {
   deficit: { texto: 'No alcanza el margen de seguridad', tono: 'negativo' },
   ajustado: { texto: 'Justo dentro del margen', tono: 'atencion' },
   holgado: { texto: 'Con excedente para capital', tono: 'positivo' },
+} as const;
+
+/** El color con que se pinta el estado de la quincena en el panel principal. */
+const ETIQUETAS_COLOR = {
+  deficit: colors.red,
+  ajustado: colors.orange,
+  holgado: colors.acento,
 } as const;
 
 const GASTOS_FIJOS_YA_APLICADOS: GastosFijos = { casa: 0, comida: 0, pases: 0, deudaBase: 0 };
@@ -288,6 +303,118 @@ export function ResumenScreen() {
       : null;
   }, [deudasHook.deudas]);
 
+  const diasHabiles = useMemo(
+    () => diasHabilesTransporte(inicioQuincena, payday.date),
+    [inicioQuincena, payday],
+  );
+
+  /** Los cuatro datos duros que encabezan el panel. */
+  const celdasDatos: CeldaDato[] = useMemo(
+    () => [
+      {
+        etiqueta: 'Reserva',
+        valor: formatearColones(distribucion.reserva),
+        detalle: `Piso ${formatearColones(distribucion.banda.min)}`,
+        tono: distribucion.estado === 'deficit' ? 'negativo' : 'normal',
+      },
+      {
+        etiqueta: 'A capital',
+        valor: formatearColones(distribucion.abonoCapitalSugerido),
+        detalle: distribucion.estado === 'holgado' ? 'Excedente libre' : 'Sin excedente',
+        tono: distribucion.abonoCapitalSugerido > 0 ? 'positivo' : 'normal',
+      },
+      {
+        etiqueta: 'Días hábiles',
+        valor: String(diasHabiles),
+        detalle: 'De la quincena',
+      },
+      {
+        etiqueta: 'Costo/día',
+        valor: formatearColones(rutas.costoDiarioTotal),
+        detalle: `${rutas.tramos.length} tramo${rutas.tramos.length === 1 ? '' : 's'}`,
+      },
+    ],
+    [distribucion, diasHabiles, rutas.costoDiarioTotal, rutas.tramos.length],
+  );
+
+  /**
+   * Tendencia del disponible.
+   *
+   * Todavía no se guarda el histórico de quincenas cerradas, así que la serie
+   * se arma con los movimientos reales de ESTA quincena: el disponible que
+   * habría quedado después de cada gasto anotado, en orden. Es una curva real
+   * (sale de datos reales, no de un relleno inventado) y responde la misma
+   * pregunta: hacia dónde viene bajando la plata.
+   */
+  const tendenciaDisponible = useMemo(() => {
+    const delPeriodo = libro.movimientos
+      .filter((m) => dentroDeVentana(m.fecha, inicioQuincena, payday.date))
+      .slice()
+      .reverse();
+    if (delPeriodo.length === 0) return [];
+
+    const arranque = (colilla.monto ?? 170_000) - transporteProyectado - otrosGastosFijos;
+    const serie = [arranque];
+    let saldo = arranque;
+    for (const m of delPeriodo) {
+      saldo += m.tipo === 'ingreso' ? m.monto : -m.monto;
+      serie.push(Math.round(saldo));
+    }
+    return serie;
+  }, [
+    libro.movimientos,
+    inicioQuincena,
+    payday,
+    colilla.monto,
+    transporteProyectado,
+    otrosGastosFijos,
+  ]);
+
+  /**
+   * Consumo por rubro contra lo previsto.
+   *
+   * El techo de transporte es la proyección de la quincena; el de gastos
+   * diarios, lo que queda del ingreso una vez apartados transporte y fijos —
+   * o sea, lo que de verdad hay para gastar día a día.
+   */
+  const rubrosConsumo: RubroTermometro[] = useMemo(() => {
+    const ingresoBruto = (colilla.monto ?? 170_000) + ingresosExtraQuincena;
+    const transporteGastado = libro.movimientos
+      .filter(
+        (m) =>
+          m.categoria === 'Transporte ocasional' &&
+          dentroDeVentana(m.fecha, inicioQuincena, payday.date),
+      )
+      .reduce((suma, m) => suma + m.monto, 0);
+
+    return [
+      {
+        etiqueta: 'Transporte',
+        consumido: transporteGastado,
+        techo: transporteProyectado,
+      },
+      {
+        etiqueta: 'Diarios',
+        consumido: gastosDiariosReales,
+        techo: Math.max(0, ingresoBruto - transporteProyectado - otrosGastosFijos),
+      },
+      {
+        etiqueta: 'Fijos',
+        consumido: otrosGastosFijos,
+        techo: ingresoBruto,
+      },
+    ];
+  }, [
+    colilla.monto,
+    ingresosExtraQuincena,
+    libro.movimientos,
+    inicioQuincena,
+    payday,
+    transporteProyectado,
+    gastosDiariosReales,
+    otrosGastosFijos,
+  ]);
+
   const barrasFlujo: BarraFlujo[] = useMemo(
     () => [
       {
@@ -317,7 +444,11 @@ export function ResumenScreen() {
     // `edges` sin 'bottom': el dock de pestañas ya reserva ese borde por su
     // cuenta (ver RootTabs), y reservarlo dos veces deja una franja muerta.
     <SafeAreaView style={styles.pantalla} edges={['top', 'left', 'right']}>
-      <BlurHeader titulo="Quincena" subtitulo={`Próximo pago: ${fechaLegible(payday.date)}`} />
+      <BlurHeader
+        titulo="Quincena"
+        subtitulo={`Próximo pago · ${fechaLegible(payday.date)}`}
+        enVivo={!sincronizando && !colilla.cargando}
+      />
 
       <KeyboardAvoidingView
         style={styles.flexible}
@@ -345,13 +476,32 @@ export function ResumenScreen() {
           ]}
         />
 
-        <Card>
-          <Text style={styles.etiqueta}>Ingreso disponible de esta quincena</Text>
-          <Text style={styles.monto}>{formatearColones(ingresoDisponible)}</Text>
+        {/* Panel principal, marcado como "encendido": es la única cifra de la
+            pantalla que se lee antes que cualquier otra cosa. */}
+        <Card activo>
+          <Text style={styles.etiqueta}>DISPONIBLE</Text>
+          <Text style={[styles.monto, ingresoDisponible < 0 && styles.montoNegativo]}>
+            {formatearColones(ingresoDisponible)}
+          </Text>
+          <Text style={[styles.estadoBanda, { color: ETIQUETAS_COLOR[distribucion.estado] }]}>
+            Banda {formatearColones(distribucion.banda.min)}–
+            {formatearColones(distribucion.banda.max)} ·{' '}
+            {ETIQUETAS_ESTADO[distribucion.estado].texto}
+          </Text>
+
+          {tendenciaDisponible.length > 1 ? (
+            <View style={styles.tendencia}>
+              <GraficoTendencia
+                valores={tendenciaDisponible}
+                referencia={distribucion.banda.min}
+              />
+            </View>
+          ) : null}
+
           <Text style={styles.pie}>
             {colilla.monto !== null
-              ? `Colilla confirmada de ${formatearColones(colilla.monto)} + ingresos extra − transporte − gastos diarios − otros gastos fijos`
-              : '170.000 (base) + ingresos extra − transporte proyectado − gastos diarios reales − otros gastos fijos'}
+              ? `Colilla ${formatearColones(colilla.monto)} + extra − transporte − diarios − fijos`
+              : 'Base 170.000 + extra − transporte − diarios − fijos'}
           </Text>
           {payday.movedFromWeekend ? (
             <View style={styles.aviso}>
@@ -361,6 +511,15 @@ export function ResumenScreen() {
             </View>
           ) : null}
         </Card>
+
+        <RejillaDatos celdas={celdasDatos} />
+
+        <View style={styles.seccion}>
+          <SectionHeader titulo="Consumo por rubro" />
+          <Card>
+            <Termometro rubros={rubrosConsumo} />
+          </Card>
+        </View>
 
         {pedirColilla ? (
           <View style={styles.seccion}>
@@ -451,7 +610,7 @@ export function ResumenScreen() {
                 value={textoPrecioTramo}
                 onChangeText={setTextoPrecioTramo}
                 keyboardType="number-pad"
-                placeholder="Precio por pase"
+                placeholder="Precio del pase"
                 placeholderTextColor={colors.labelTertiary}
               />
               <TextInput
@@ -459,7 +618,7 @@ export function ResumenScreen() {
                 value={textoUsosTramo}
                 onChangeText={setTextoUsosTramo}
                 keyboardType="number-pad"
-                placeholder="Usos/día"
+                placeholder="Usos"
                 placeholderTextColor={colors.labelTertiary}
               />
             </View>
@@ -475,7 +634,8 @@ export function ResumenScreen() {
               <Switch
                 value={esOcasional}
                 onValueChange={setEsOcasional}
-                trackColor={{ true: colors.brandGold, false: colors.fill }}
+                trackColor={{ true: colors.acento, false: colors.fill }}
+                thumbColor={colors.label}
               />
             </View>
             <PrimaryButton
@@ -619,9 +779,12 @@ const styles = StyleSheet.create({
   flexible: { flex: 1 },
   contenido: { padding: spacing.lg, gap: spacing.xl, paddingBottom: spacing.xxxl },
   seccion: { gap: 0 },
-  etiqueta: { ...typography.footnote, color: colors.labelSecondary },
+  etiqueta: { ...typography.rotulo, color: colors.labelTertiary },
   monto: { ...typography.amount, color: colors.label, marginTop: spacing.xs },
-  pie: { ...typography.footnote, color: colors.labelSecondary, marginTop: spacing.xs },
+  montoNegativo: { color: colors.red },
+  estadoBanda: { ...typography.caption1, marginTop: 2 },
+  tendencia: { marginTop: spacing.md },
+  pie: { ...typography.caption1, color: colors.labelTertiary, marginTop: spacing.sm },
   aviso: {
     marginTop: spacing.lg,
     backgroundColor: colors.orangeSoft,
@@ -633,8 +796,13 @@ const styles = StyleSheet.create({
   formularioTramo: { gap: spacing.sm, marginTop: spacing.sm },
   formularioColilla: { gap: spacing.md, marginTop: spacing.md },
   filaCampos: { flexDirection: 'row', gap: spacing.sm },
-  campoFlexible: { flex: 2 },
-  campoAngosto: { flex: 1 },
+  // `flex` en los dos campos dejaba que el de la derecha se saliera del
+  // borde: en monoespaciada el texto del marcador es más ancho que el
+  // espacio que le tocaba, y sin `minWidth: 0` un campo no se encoge por
+  // debajo de su contenido. El de usos lleva ancho fijo — siempre son uno o
+  // dos dígitos — y el de precio se queda con el resto.
+  campoFlexible: { flex: 1, minWidth: 0 },
+  campoAngosto: { width: 74 },
   filaSwitch: {
     flexDirection: 'row',
     alignItems: 'center',

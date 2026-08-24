@@ -33,7 +33,7 @@ const temaNavegacion = {
     card: colors.surface,
     text: colors.label,
     border: colors.separator,
-    primary: colors.brandGold,
+    primary: colors.acento,
   },
 };
 
@@ -54,16 +54,17 @@ export function RootTabs() {
       <Tab.Navigator
         screenOptions={({ route }) => ({
           headerShown: false,
-          tabBarActiveTintColor: colors.brandGold,
+          tabBarActiveTintColor: colors.acento,
           tabBarInactiveTintColor: colors.labelSecondary,
           tabBarStyle: {
             backgroundColor: colors.surface,
+            borderTopWidth: 1,
             borderTopColor: colors.separator,
             height: ALTO_DOCK + insets.bottom,
             paddingBottom: insets.bottom + spacing.xs,
             paddingTop: spacing.xs,
           },
-          tabBarLabelStyle: { ...typography.caption2, fontWeight: '600' },
+          tabBarLabelStyle: { ...typography.caption2 },
           tabBarIcon: ({ focused, color, size }) => {
             const nombre = ICONOS[route.name as keyof RootTabParamList];
             return (

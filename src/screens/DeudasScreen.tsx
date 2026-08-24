@@ -29,7 +29,7 @@ import { formatearColones } from '../core/payroll/distribution';
 import { googleAuthConfigurado } from '../lib/googleAuth';
 import { type Deuda, useDeudas } from '../state/useDeudas';
 import { type MovimientoLibro, useLibroMayor } from '../state/useLibroMayor';
-import { campoTexto, colors, radius, spacing, typography } from '../theme';
+import { campoTexto, colors, ficha, fichaActiva, radius, spacing, typography } from '../theme';
 
 function limpiarMonto(texto: string): number {
   const n = Number(texto.replace(/[^\d]/g, ''));
@@ -201,7 +201,11 @@ export function DeudasScreen() {
 
   return (
     <SafeAreaView style={styles.pantalla} edges={['top', 'left', 'right']}>
-      <BlurHeader titulo="Deudas" subtitulo="Libro Mayor y Trituradora de Deudas" />
+      <BlurHeader
+        titulo="Deudas"
+        subtitulo="Libro Mayor · Trituradora"
+        enVivo={!refrescando}
+      />
       <KeyboardAvoidingView
         style={styles.flexible}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -451,19 +455,8 @@ const styles = StyleSheet.create({
   avisoCostoOportunidad: { marginTop: spacing.md },
   formulario: { gap: spacing.md },
   filaTipo: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' },
-  chip: {
-    ...typography.footnote,
-    color: colors.labelSecondary,
-    backgroundColor: colors.fill,
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    overflow: 'hidden',
-  },
-  chipActivo: {
-    color: colors.labelInverse,
-    backgroundColor: colors.brandGold,
-  },
+  chip: { ...ficha },
+  chipActivo: { ...fichaActiva },
   etiquetaCampo: { ...typography.footnote, color: colors.labelSecondary },
   formularioDeuda: { gap: spacing.sm, marginTop: spacing.md },
   tarjetaGrafico: { marginTop: spacing.md },
@@ -477,7 +470,7 @@ const styles = StyleSheet.create({
   mensajeGamificado: {
     ...typography.subheadline,
     color: colors.label,
-    backgroundColor: colors.brandGoldSoft,
+    backgroundColor: colors.greenSoft,
     borderRadius: radius.md,
     padding: spacing.md,
     marginTop: spacing.sm,

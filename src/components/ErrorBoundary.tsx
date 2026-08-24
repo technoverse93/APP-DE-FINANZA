@@ -87,7 +87,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   boton: {
-    backgroundColor: colors.blue,
+    backgroundColor: colors.acento,
     borderRadius: radius.pill,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.xxl,

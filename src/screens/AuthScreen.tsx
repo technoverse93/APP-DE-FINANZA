@@ -130,7 +130,7 @@ export function AuthScreen() {
                 cargando={ocupado}
               />
 
-              {ocupado ? <ActivityIndicator color={colors.blue} /> : null}
+              {ocupado ? <ActivityIndicator color={colors.acento} /> : null}
               {aviso ? <Text style={styles.aviso}>{aviso}</Text> : null}
               {error ? <Text style={styles.error}>{error}</Text> : null}
             </View>
@@ -185,7 +185,7 @@ const styles = StyleSheet.create({
   error: { ...typography.footnote, color: colors.red },
   alternar: {
     ...typography.subheadline,
-    color: colors.blue,
+    color: colors.acento,
     textAlign: 'center',
     paddingVertical: spacing.md,
   },

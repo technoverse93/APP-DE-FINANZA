@@ -7,7 +7,7 @@ import {
   type ContextoQuincena,
   type DeudaSimulada,
 } from '../core/payroll/simulador';
-import { campoTexto, colors, radius, spacing, typography } from '../theme';
+import { campoTexto, colors, ficha, fichaActiva, radius, spacing, typography } from '../theme';
 import { Card } from './Card';
 import { GraficoAmortizacion, type SerieAmortizacion } from './GraficoAmortizacion';
 import { ListRow } from './ListRow';
@@ -167,16 +167,8 @@ export const SimuladorCard = memo(function SimuladorCard({
 const styles = StyleSheet.create({
   intro: { ...typography.footnote, color: colors.labelSecondary, marginBottom: spacing.md },
   atajos: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.md },
-  chip: {
-    ...typography.footnote,
-    color: colors.labelSecondary,
-    backgroundColor: colors.fill,
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    overflow: 'hidden',
-  },
-  chipActivo: { color: colors.labelInverse, backgroundColor: colors.brandGold },
+  chip: { ...ficha },
+  chipActivo: { ...fichaActiva },
   input: {
     ...campoTexto,
   },

@@ -8,7 +8,7 @@ import {
 } from '../core/payroll/gastosFijos';
 import type { Payday } from '../core/payroll/schedule';
 import type { EntradaGastoFijo } from '../state/useGastosFijosItems';
-import { campoTexto, colors, radius, spacing, typography } from '../theme';
+import { campoTexto, colors, ficha, fichaActiva, radius, spacing, typography } from '../theme';
 import { Card } from './Card';
 import { ListRow } from './ListRow';
 import { PrimaryButton } from './PrimaryButton';
@@ -215,16 +215,8 @@ const styles = StyleSheet.create({
   etiqueta: { ...typography.footnote, color: colors.labelSecondary, marginTop: spacing.xs },
   ayuda: { ...typography.caption1, color: colors.labelTertiary },
   filaChips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  chip: {
-    ...typography.footnote,
-    color: colors.labelSecondary,
-    backgroundColor: colors.fill,
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    overflow: 'hidden',
-  },
-  chipActivo: { color: colors.labelInverse, backgroundColor: colors.brandGold },
+  chip: { ...ficha },
+  chipActivo: { ...fichaActiva },
   aviso: {
     ...typography.footnote,
     color: colors.label,

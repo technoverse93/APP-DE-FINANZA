@@ -11,5 +11,8 @@ export { OpportunityAlertToast } from './OpportunityAlertToast';
 export { GmailSyncCard } from './GmailSyncCard';
 export { GraficoAmortizacion, type SerieAmortizacion } from './GraficoAmortizacion';
 export { GraficoBarrasFlujo, type BarraFlujo } from './GraficoBarrasFlujo';
+export { GraficoTendencia } from './GraficoTendencia';
+export { RejillaDatos, type CeldaDato } from './RejillaDatos';
+export { Termometro, type RubroTermometro } from './Termometro';
 export { SimuladorCard } from './SimuladorCard';
 export { GastosFijosEditor } from './GastosFijosEditor';
