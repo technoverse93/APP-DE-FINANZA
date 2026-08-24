@@ -17,7 +17,7 @@ export interface DeudaParaCostoOportunidad {
   readonly id: string;
   readonly nombre: string;
   readonly saldoActual: number;
-  readonly tasaAnual: number;
+  readonly tasaMensual: number;
   readonly abonoObjetivo: number;
 }
 
@@ -60,11 +60,11 @@ export function calcularCostoOportunidad(
 ): CostoOportunidad | null {
   if (!Number.isFinite(montoGasto) || montoGasto <= 0 || deudas.length === 0) return null;
 
-  const [prioritaria] = [...deudas].sort((a, b) => b.tasaAnual - a.tasaAnual);
+  const [prioritaria] = [...deudas].sort((a, b) => b.tasaMensual - a.tasaMensual);
   if (prioritaria.abonoObjetivo <= 0 || prioritaria.saldoActual <= 0) return null;
 
   const parametrosBase: Omit<ParametrosTrituradora, 'saldoInicial'> = {
-    tasaAnualNominal: prioritaria.tasaAnual,
+    tasaMensualNominal: prioritaria.tasaMensual,
     abonoPorPeriodo: prioritaria.abonoObjetivo,
   };
 

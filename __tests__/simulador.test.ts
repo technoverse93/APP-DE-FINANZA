@@ -51,7 +51,7 @@ describe('compararEscenarioIngreso', () => {
   });
 
   it('acelera la deuda: más ingreso salda en menos quincenas y ahorra intereses', () => {
-    const deuda = { saldoActual: 500_000, tasaAnual: 0.24, abonoObjetivo: 50_000 };
+    const deuda = { saldoActual: 500_000, tasaMensual: 0.02, abonoObjetivo: 50_000 };
     const c = compararEscenarioIngreso({
       ingresoBaseSimulado: 250_000,
       contexto: SIN_GASTOS,
@@ -75,7 +75,7 @@ describe('compararEscenarioIngreso', () => {
   it('no compara plazos si alguno de los dos escenarios no llega a saldar', () => {
     // Abono que no cubre ni el interés: la deuda crece y nunca se salda, así
     // que restar períodos daría un ahorro inventado.
-    const deuda = { saldoActual: 5_000_000, tasaAnual: 0.6, abonoObjetivo: 1_000 };
+    const deuda = { saldoActual: 5_000_000, tasaMensual: 0.05, abonoObjetivo: 1_000 };
     const c = compararEscenarioIngreso({
       ingresoBaseSimulado: 171_000,
       contexto: SIN_GASTOS,

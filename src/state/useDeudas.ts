@@ -5,7 +5,9 @@ export interface Deuda {
   readonly id: string;
   readonly nombre: string;
   readonly saldoActual: number;
-  readonly tasaAnual: number;
+  /** Tasa nominal MENSUAL, ej. 0.02 para 2% mensual — así viene publicada en
+   * un estado de cuenta costarricense. */
+  readonly tasaMensual: number;
   readonly abonoObjetivo: number;
 }
 
@@ -21,7 +23,7 @@ export function useDeudas() {
     try {
       const { data, error: e } = await supabase
         .from('deudas')
-        .select('id, nombre, saldo_actual, tasa_anual, abono_objetivo')
+        .select('id, nombre, saldo_actual, tasa_mensual, abono_objetivo')
         .order('creada_en', { ascending: true });
       if (e) throw e;
       setDeudas(
@@ -29,7 +31,7 @@ export function useDeudas() {
           id: d.id as string,
           nombre: d.nombre as string,
           saldoActual: Number(d.saldo_actual),
-          tasaAnual: Number(d.tasa_anual),
+          tasaMensual: Number(d.tasa_mensual),
           abonoObjetivo: Number(d.abono_objetivo),
         })),
       );
@@ -45,7 +47,7 @@ export function useDeudas() {
   }, [cargar]);
 
   const guardar = useCallback(
-    async (deuda: { nombre: string; saldoActual: number; tasaAnual: number; abonoObjetivo: number }) => {
+    async (deuda: { nombre: string; saldoActual: number; tasaMensual: number; abonoObjetivo: number }) => {
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -57,7 +59,7 @@ export function useDeudas() {
         usuario_id: user.id,
         nombre: deuda.nombre,
         saldo_actual: deuda.saldoActual,
-        tasa_anual: deuda.tasaAnual,
+        tasa_mensual: deuda.tasaMensual,
         abono_objetivo: deuda.abonoObjetivo,
       });
       if (e) {

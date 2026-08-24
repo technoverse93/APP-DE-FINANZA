@@ -24,11 +24,12 @@ import {
   type SerieAmortizacion,
 } from '../components';
 import { calcularCostoOportunidad, type CostoOportunidad } from '../core/analytics/opportunityCost';
-import { priorizarAbonoExtra, proyectarConGamificacion } from '../core/debt/crusher';
+import { priorizarAbonoExtra, proyectarPorPorcentajeRemanente } from '../core/debt/crusher';
 import { formatearColones } from '../core/payroll/distribution';
 import { googleAuthConfigurado } from '../lib/googleAuth';
 import { type Deuda, useDeudas } from '../state/useDeudas';
-import { type MovimientoLibro, useLibroMayor } from '../state/useLibroMayor';
+import { useDistribucionQuincena } from '../state/useDistribucionQuincena';
+import { type MovimientoLibro } from '../state/useLibroMayor';
 import { campoTexto, colors, ficha, fichaActiva, radius, spacing, typography } from '../theme';
 
 function limpiarMonto(texto: string): number {
@@ -52,6 +53,9 @@ function fechaLegible(fecha: Date | null): string {
   }
 }
 
+/** Porcentajes de un toque, para no obligar a teclear en el teléfono. */
+const PORCENTAJES_ATAJO = [25, 50, 75, 100] as const;
+
 /** Fila del Libro Mayor. Memoizada: la lista puede crecer a 200 entradas y no
  * hay razón para re-renderizar las que no cambiaron en cada tecla del form. */
 const FilaMovimiento = memo(function FilaMovimiento({
@@ -73,7 +77,12 @@ const FilaMovimiento = memo(function FilaMovimiento({
 });
 
 export function DeudasScreen() {
-  const libro = useLibroMayor();
+  // Fuente única del remanente libre: el mismo cálculo que ve la pantalla de
+  // Quincena. Sin esto, la Trituradora habría tenido que repetir toda la
+  // cadena de ingreso disponible por su cuenta, con el riesgo real de que un
+  // día las dos pantallas dieran números distintos para "lo mismo".
+  const q = useDistribucionQuincena();
+  const libro = q.libro;
   const deudasHook = useDeudas();
 
   const [textoMontoLibro, setTextoMontoLibro] = useState('');
@@ -82,7 +91,8 @@ export function DeudasScreen() {
   const [tipoLibro, setTipoLibro] = useState<'gasto' | 'ingreso'>('gasto');
 
   const [deudaSeleccionadaId, setDeudaSeleccionadaId] = useState<string | null>(null);
-  const [textoAbonoExtra, setTextoAbonoExtra] = useState('');
+  const [porcentajeRemanente, setPorcentajeRemanente] = useState(50);
+  const [textoPorcentaje, setTextoPorcentaje] = useState('');
 
   const [alertaCosto, setAlertaCosto] = useState<CostoOportunidad | null>(null);
 
@@ -95,26 +105,26 @@ export function DeudasScreen() {
   const agregarDeuda = useCallback(() => {
     const saldo = limpiarMonto(textoSaldo);
     const abono = limpiarMonto(textoAbonoObjetivo);
-    // La tasa se escribe como porcentaje ("24") porque es como viene en el
-    // estado de cuenta; el motor la quiere como fracción (0.24).
+    // La tasa se escribe como porcentaje MENSUAL ("2") porque es como viene
+    // en el estado de cuenta; el motor la quiere como fracción (0.02).
     const tasaPorciento = Number(textoTasa.replace(',', '.').replace(/[^\d.]/g, ''));
     if (!nombreDeuda.trim() || saldo <= 0) {
       setAvisoDeuda('Poné un nombre y el saldo que debés hoy.');
       return;
     }
     if (!Number.isFinite(tasaPorciento) || tasaPorciento < 0) {
-      setAvisoDeuda('Escribí la tasa anual como número, por ejemplo 24 para 24%.');
+      setAvisoDeuda('Escribí la tasa mensual como número, por ejemplo 2 para 2%.');
       return;
     }
     if (abono <= 0) {
-      setAvisoDeuda('Poné cuánto abonás por quincena. Sin eso no se puede proyectar el plazo.');
+      setAvisoDeuda('Poné cuánto pagás de mínimo por quincena según el contrato.');
       return;
     }
     setAvisoDeuda(null);
     void deudasHook.guardar({
       nombre: nombreDeuda.trim(),
       saldoActual: saldo,
-      tasaAnual: tasaPorciento / 100,
+      tasaMensual: tasaPorciento / 100,
       abonoObjetivo: abono,
     });
     setNombreDeuda('');
@@ -147,57 +157,62 @@ export function DeudasScreen() {
     [deudasHook.deudas, deudaSeleccionadaId],
   );
 
-  const abonoExtra = limpiarMonto(textoAbonoExtra);
+  /**
+   * Remanente libre REAL de esta quincena: el excedente que queda por
+   * encima de la banda de seguridad, tal cual lo calcula la pantalla de
+   * Quincena. No es una cuota mínima que alguien tecleó una vez y quedó
+   * grabada — cambia solo con cambiar el porcentaje o con lo que de verdad
+   * pasó esta quincena (ingresos, gastos, transporte).
+   */
+  const remanenteLibre = Math.max(0, q.distribucion.abonoCapitalSugerido);
 
-  const proyeccion = useMemo(() => {
-    if (!deudaSeleccionada || deudaSeleccionada.abonoObjetivo <= 0) return null;
-    return proyectarConGamificacion(
-      {
-        saldoInicial: deudaSeleccionada.saldoActual,
-        tasaAnualNominal: deudaSeleccionada.tasaAnual,
-        abonoBase: deudaSeleccionada.abonoObjetivo,
-        abonoExtra,
-      },
+  const porcentajePersonalizado = limpiarMonto(textoPorcentaje);
+  const porcentajeActivo =
+    porcentajePersonalizado > 0 ? Math.min(porcentajePersonalizado, 100) : porcentajeRemanente;
+
+  const montoDestinado = Math.round(remanenteLibre * (porcentajeActivo / 100));
+
+  const proyeccionPorcentaje = useMemo(() => {
+    if (!deudaSeleccionada || deudaSeleccionada.saldoActual <= 0) return null;
+    return proyectarPorPorcentajeRemanente(
+      deudaSeleccionada.saldoActual,
+      deudaSeleccionada.tasaMensual,
+      remanenteLibre,
+      porcentajeActivo,
       new Date(),
     );
-  }, [deudaSeleccionada, abonoExtra]);
+  }, [deudaSeleccionada, remanenteLibre, porcentajeActivo]);
 
-  /** Las dos curvas de saldo, para ver el efecto del abono extra en vez de
-   * solo leerlo como una fecha. Solo se dibujan si hay extra que comparar:
-   * dos curvas idénticas superpuestas no dicen nada. */
+  /** La curva de saldo de la deuda seleccionada bajo el porcentaje elegido. */
   const seriesAmortizacion: SerieAmortizacion[] = useMemo(() => {
-    if (!proyeccion || abonoExtra <= 0) return [];
-    const curva = (periodos: readonly { saldoInicial: number; saldoFinal: number }[]) =>
-      periodos.length === 0
-        ? []
-        : [periodos[0]!.saldoInicial, ...periodos.map((p) => p.saldoFinal)];
+    if (!proyeccionPorcentaje) return [];
+    const periodos = proyeccionPorcentaje.resultado.periodos;
+    if (periodos.length === 0) return [];
     return [
       {
-        etiqueta: 'Plan base',
-        color: colors.labelTertiary,
-        saldos: curva(proyeccion.comparacion.base.periodos),
-      },
-      {
-        etiqueta: `Con ${formatearColones(abonoExtra)} extra`,
-        color: colors.green,
-        saldos: curva(proyeccion.comparacion.conExtra.periodos),
+        etiqueta: `${porcentajeActivo}% del remanente (${formatearColones(proyeccionPorcentaje.abonoPorPeriodo)}/quincena)`,
+        color: colors.acento,
+        saldos: [periodos[0]!.saldoInicial, ...periodos.map((p) => p.saldoFinal)],
       },
     ];
-  }, [proyeccion, abonoExtra]);
+  }, [proyeccionPorcentaje, porcentajeActivo]);
 
-  /** Cómo repartir el abono extra entre TODAS las deudas (método avalancha):
-   * solo tiene sentido mostrarlo con dos o más deudas — con una sola, el
-   * extra ya va completo a esa deuda y esta tarjeta no agregaría nada. */
+  /** Cómo repartir el monto destinado entre TODAS las deudas (método
+   * avalancha): solo tiene sentido mostrarlo con dos o más deudas — con una
+   * sola, el monto ya va completo a esa deuda y esta tarjeta no agregaría
+   * nada. El monto a repartir es el mismo remanente × porcentaje de arriba,
+   * no un número aparte que alguien escriba dos veces. */
   const asignacionAvalancha = useMemo(() => {
-    if (abonoExtra <= 0 || deudasHook.deudas.length < 2) return null;
-    return priorizarAbonoExtra(abonoExtra, deudasHook.deudas);
-  }, [abonoExtra, deudasHook.deudas]);
+    if (montoDestinado <= 0 || deudasHook.deudas.length < 2) return null;
+    return priorizarAbonoExtra(montoDestinado, deudasHook.deudas);
+  }, [montoDestinado, deudasHook.deudas]);
 
-  const refrescando = libro.cargando || deudasHook.cargando;
+  const refrescando = libro.cargando || deudasHook.cargando || q.gastosFijosItems.cargando;
   const recargarTodo = useCallback(() => {
     void libro.recargar();
     void deudasHook.recargar();
-  }, [libro, deudasHook]);
+    void q.recargar();
+  }, [libro, deudasHook, q]);
 
   return (
     <SafeAreaView style={styles.pantalla} edges={['top', 'left', 'right']}>
@@ -215,7 +230,7 @@ export function DeudasScreen() {
           keyboardShouldPersistTaps="handled"
           refreshControl={<RefreshControl refreshing={refrescando} onRefresh={recargarTodo} />}
         >
-        <AvisoError errores={[libro.error, deudasHook.error]} />
+        <AvisoError errores={[libro.error, deudasHook.error, q.error, q.gastosFijosItems.error]} />
 
         {googleAuthConfigurado ? (
           <View style={styles.seccion}>
@@ -327,21 +342,45 @@ export function DeudasScreen() {
                   ))}
                 </View>
                 {deudaSeleccionada ? (
-                  <>
-                    <Text style={styles.etiquetaCampo}>
-                      Saldo {formatearColones(deudaSeleccionada.saldoActual)} · Abono objetivo{' '}
-                      {formatearColones(deudaSeleccionada.abonoObjetivo)} por quincena
-                    </Text>
-                    <TextInput
-                      style={styles.input}
-                      value={textoAbonoExtra}
-                      onChangeText={setTextoAbonoExtra}
-                      keyboardType="number-pad"
-                      placeholder="Abono extra por quincena"
-                      placeholderTextColor={colors.labelTertiary}
-                    />
-                  </>
+                  <Text style={styles.etiquetaCampo}>
+                    Saldo {formatearColones(deudaSeleccionada.saldoActual)} · Tasa{' '}
+                    {(deudaSeleccionada.tasaMensual * 100).toFixed(1)}% mensual
+                  </Text>
                 ) : null}
+
+                <Text style={styles.etiquetaCampo}>
+                  Remanente libre de esta quincena: {formatearColones(remanenteLibre)}
+                </Text>
+                <Text style={styles.ayuda}>
+                  No es una cuota fija: es lo que sobra hoy por encima de tu banda de seguridad.
+                  Elegí qué parte destinás a esta deuda.
+                </Text>
+
+                <View style={styles.filaTipo}>
+                  {PORCENTAJES_ATAJO.map((pct) => (
+                    <Text
+                      key={pct}
+                      onPress={() => {
+                        setPorcentajeRemanente(pct);
+                        setTextoPorcentaje('');
+                      }}
+                      style={[
+                        styles.chip,
+                        porcentajeActivo === pct && !textoPorcentaje && styles.chipActivo,
+                      ]}
+                    >
+                      {pct}%
+                    </Text>
+                  ))}
+                </View>
+                <TextInput
+                  style={styles.input}
+                  value={textoPorcentaje}
+                  onChangeText={setTextoPorcentaje}
+                  keyboardType="number-pad"
+                  placeholder="Otro porcentaje (1-100)"
+                  placeholderTextColor={colors.labelTertiary}
+                />
               </View>
             )}
           </Card>
@@ -372,7 +411,7 @@ export function DeudasScreen() {
               value={textoTasa}
               onChangeText={setTextoTasa}
               keyboardType="decimal-pad"
-              placeholder="Tasa anual en % (ej. 24)"
+              placeholder="Tasa mensual en % (ej. 2)"
               placeholderTextColor={colors.labelTertiary}
             />
             <TextInput
@@ -380,7 +419,7 @@ export function DeudasScreen() {
               value={textoAbonoObjetivo}
               onChangeText={setTextoAbonoObjetivo}
               keyboardType="number-pad"
-              placeholder="Cuánto abonás por quincena"
+              placeholder="Pago mínimo del contrato por quincena"
               placeholderTextColor={colors.labelTertiary}
             />
             {avisoDeuda ? <Text style={styles.avisoDeuda}>{avisoDeuda}</Text> : null}
@@ -388,38 +427,59 @@ export function DeudasScreen() {
           </View>
         </View>
 
-        {proyeccion ? (
+        {proyeccionPorcentaje ? (
           <View style={styles.seccion}>
-            <SectionHeader titulo="Ahorro proyectado" />
+            <SectionHeader titulo={`Proyección con ${porcentajeActivo}% del remanente`} />
             <Card sinRelleno>
               <ListRow
-                titulo="Fecha en que quedás libre (plan base)"
-                valor={fechaLegible(proyeccion.fechaSaldoBase)}
+                titulo="Abono por quincena"
+                detalle="Remanente libre × porcentaje elegido"
+                valor={formatearColones(proyeccionPorcentaje.abonoPorPeriodo)}
               />
               <ListRow
-                titulo="Fecha en que quedás libre (con extra)"
-                valor={fechaLegible(proyeccion.fechaSaldoConExtra)}
-                tono="positivo"
+                titulo="Fecha en que quedás libre"
+                valor={fechaLegible(proyeccionPorcentaje.fechaSaldoCero)}
+                tono={proyeccionPorcentaje.resultado.saldado ? 'positivo' : 'negativo'}
               />
               <ListRow
-                titulo="Interés que te ahorrás"
-                valor={formatearColones(proyeccion.comparacion.interesAhorrado)}
-                tono="positivo"
+                titulo="Plazo estimado"
+                valor={
+                  proyeccionPorcentaje.resultado.saldado
+                    ? `${proyeccionPorcentaje.resultado.periodosParaSaldar} quincenas`
+                    : 'No alcanza a saldar en 10 años'
+                }
+              />
+              <ListRow
+                titulo="Intereses totales a pagar"
+                valor={formatearColones(proyeccionPorcentaje.resultado.totalInteresPagado)}
                 ultima
               />
             </Card>
-            <Text style={styles.mensajeGamificado}>{proyeccion.mensaje}</Text>
+            {!proyeccionPorcentaje.resultado.saldado ? (
+              <Text style={styles.avisoDeuda}>
+                Con este porcentaje el abono no alcanza a cubrir ni el interés: el saldo va a
+                crecer en vez de bajar. Subí el porcentaje destinado.
+              </Text>
+            ) : null}
             {seriesAmortizacion.length > 0 ? (
               <Card style={styles.tarjetaGrafico}>
                 <GraficoAmortizacion series={seriesAmortizacion} />
               </Card>
             ) : null}
           </View>
+        ) : deudaSeleccionada && remanenteLibre <= 0 ? (
+          <View style={styles.seccion}>
+            <SectionHeader titulo="Proyección" />
+            <Text style={styles.mensajeVacio}>
+              Esta quincena no hay remanente libre: todo el disponible se queda en la banda de
+              seguridad. Sin remanente no hay nada que destinar a la deuda todavía.
+            </Text>
+          </View>
         ) : null}
 
         {asignacionAvalancha ? (
           <View style={styles.seccion}>
-            <SectionHeader titulo="Reparto sugerido del abono extra" />
+            <SectionHeader titulo="Reparto sugerido del remanente" />
             <Card sinRelleno>
               <Text style={styles.avisoAvalancha}>
                 Repartido por tasa de interés: primero se llena la deuda más cara hasta saldarla, y
@@ -431,7 +491,7 @@ export function DeudasScreen() {
                   <ListRow
                     key={asig.deudaId}
                     titulo={deuda?.nombre ?? asig.deudaId}
-                    detalle={`Objetivo ${formatearColones(deuda?.abonoObjetivo ?? 0)} + extra ${formatearColones(asig.abonoExtraAsignado)}`}
+                    detalle={`Mínimo del contrato ${formatearColones(deuda?.abonoObjetivo ?? 0)} + remanente ${formatearColones(asig.abonoExtraAsignado)}`}
                     valor={formatearColones(asig.abonoTotal)}
                     tono={asig.abonoExtraAsignado > 0 ? 'positivo' : 'normal'}
                     ultima={i === asignacionAvalancha.length - 1}
@@ -458,6 +518,7 @@ const styles = StyleSheet.create({
   chip: { ...ficha },
   chipActivo: { ...fichaActiva },
   etiquetaCampo: { ...typography.footnote, color: colors.labelSecondary },
+  ayuda: { ...typography.caption1, color: colors.labelTertiary },
   formularioDeuda: { gap: spacing.sm, marginTop: spacing.md },
   tarjetaGrafico: { marginTop: spacing.md },
   avisoDeuda: {
@@ -466,14 +527,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.orangeSoft,
     borderRadius: radius.md,
     padding: spacing.md,
-  },
-  mensajeGamificado: {
-    ...typography.subheadline,
-    color: colors.label,
-    backgroundColor: colors.greenSoft,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    marginTop: spacing.sm,
   },
   avisoAvalancha: {
     ...typography.footnote,
@@ -484,5 +537,5 @@ const styles = StyleSheet.create({
   input: {
     ...campoTexto,
   },
-  mensajeVacio: { ...typography.subheadline, color: colors.labelSecondary },
+  mensajeVacio: { ...typography.subheadline, color: colors.labelSecondary, padding: spacing.lg },
 });
