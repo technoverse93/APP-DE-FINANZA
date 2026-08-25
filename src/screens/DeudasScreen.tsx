@@ -22,6 +22,7 @@ import {
   OpportunityAlertToast,
   PrimaryButton,
   SectionHeader,
+  SimuladorRemanente,
   type SerieAmortizacion,
 } from '../components';
 import { calcularCostoOportunidad, type CostoOportunidad } from '../core/analytics/opportunityCost';
@@ -34,8 +35,8 @@ import {
 import { formatearColones } from '../core/payroll/distribution';
 import { avanzarNPeriodos } from '../core/payroll/schedule';
 import { googleAuthConfigurado } from '../lib/googleAuth';
-import { type Deuda, useDeudas } from '../state/useDeudas';
-import { useDistribucionQuincena } from '../state/useDistribucionQuincena';
+import { useDatosFinancieros } from '../state/DatosFinancierosProvider';
+import { type Deuda } from '../state/useDeudas';
 import { type MovimientoLibro } from '../state/useLibroMayor';
 import { campoTexto, colors, ficha, fichaActiva, radius, spacing, typography } from '../theme';
 
@@ -88,9 +89,8 @@ export function DeudasScreen() {
   // Quincena. Sin esto, la Trituradora habría tenido que repetir toda la
   // cadena de ingreso disponible por su cuenta, con el riesgo real de que un
   // día las dos pantallas dieran números distintos para "lo mismo".
-  const q = useDistribucionQuincena();
+  const { q, deudasHook } = useDatosFinancieros();
   const libro = q.libro;
-  const deudasHook = useDeudas();
 
   const [textoMontoLibro, setTextoMontoLibro] = useState('');
   const [descripcionLibro, setDescripcionLibro] = useState('');
@@ -113,6 +113,9 @@ export function DeudasScreen() {
   const [tieneCuotaFija, setTieneCuotaFija] = useState(false);
   const [textoAbonoObjetivo, setTextoAbonoObjetivo] = useState('');
   const [textoPlazo, setTextoPlazo] = useState('');
+  // Marca las deudas cuyo interés corre por día. No cambia el cálculo (la
+  // tasa sigue siendo mensual) pero sí la prioridad con que se muestran.
+  const [moraDiaria, setMoraDiaria] = useState(false);
   const [avisoDeuda, setAvisoDeuda] = useState<string | null>(null);
 
   const agregarDeuda = useCallback(async () => {
@@ -143,6 +146,7 @@ export function DeudasScreen() {
       tasaMensual: tasaPorciento / 100,
       abonoObjetivo: abono,
       plazoQuincenas: tieneCuotaFija ? plazo : null,
+      interesMoratorioDiario: moraDiaria,
     });
 
     // Con cuota fija, esa cuota es un compromiso real del presupuesto —no un
@@ -167,7 +171,18 @@ export function DeudasScreen() {
     setTieneCuotaFija(false);
     setTextoAbonoObjetivo('');
     setTextoPlazo('');
-  }, [nombreDeuda, textoSaldo, textoTasa, tieneCuotaFija, textoAbonoObjetivo, textoPlazo, deudasHook, q]);
+    setMoraDiaria(false);
+  }, [
+    nombreDeuda,
+    textoSaldo,
+    textoTasa,
+    tieneCuotaFija,
+    textoAbonoObjetivo,
+    textoPlazo,
+    moraDiaria,
+    deudasHook,
+    q,
+  ]);
 
   const agregarMovimiento = useCallback(() => {
     const monto = limpiarMonto(textoMontoLibro);
@@ -551,10 +566,38 @@ export function DeudasScreen() {
               </>
             ) : null}
 
+            <View style={styles.filaSwitch}>
+              <View style={styles.textoSwitch}>
+                <Text style={styles.etiquetaCampo}>¿El interés corre por día?</Text>
+                <Text style={styles.ayuda}>
+                  {moraDiaria
+                    ? 'Se marca como MORA DIARIA y se prioriza sobre las demás.'
+                    : 'Encendelo si es una mora que suma cada día (ej. un alquiler atrasado).'}
+                </Text>
+              </View>
+              <Switch
+                value={moraDiaria}
+                onValueChange={setMoraDiaria}
+                trackColor={{ true: colors.red, false: colors.fill }}
+                thumbColor={colors.label}
+              />
+            </View>
+
             {avisoDeuda ? <Text style={styles.avisoDeuda}>{avisoDeuda}</Text> : null}
             <PrimaryButton titulo="Guardar deuda" onPress={() => void agregarDeuda()} />
           </View>
         </View>
+
+        {/* El simulador va ANTES de las proyecciones: la pregunta que la
+            persona trae al abrir esta pantalla es "¿me conviene meterle el
+            excedente?", y esa se contesta con la diferencia entre escenarios,
+            no con el detalle de uno solo. */}
+        {deudaSeleccionada && deudaSeleccionada.saldoActual > 0 ? (
+          <View style={styles.seccion}>
+            <SectionHeader titulo={`Simular abono a ${deudaSeleccionada.nombre}`} />
+            <SimuladorRemanente deuda={deudaSeleccionada} remanenteLibre={remanenteLibre} />
+          </View>
+        ) : null}
 
         {proyeccionSoloCuota ? (
           <View style={styles.seccion}>

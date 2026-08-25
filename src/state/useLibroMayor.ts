@@ -61,6 +61,22 @@ export function useLibroMayor() {
     void cargar();
   }, [cargar]);
 
+  /**
+   * Anota un movimiento con UI optimista.
+   *
+   * Antes esto insertaba y después recargaba las 200 filas del libro para
+   * recién ahí repintar: contra la red del teléfono eso son varios segundos
+   * en los que el gasto que se acaba de anotar no aparece por ningún lado y
+   * el remanente sigue mostrando la cifra vieja. Para un gasto hormiga que se
+   * anota parado en la fila del súper, esa espera es la diferencia entre usar
+   * la app y no usarla.
+   *
+   * Ahora la fila se pinta de una y la escritura viaja en segundo plano. Como
+   * todos los totales de la app (remanente, disponible, distribución) se
+   * derivan de esta lista, pintar acá actualiza la pantalla entera al
+   * instante. Si la escritura falla, la fila se retira y se avisa: es
+   * preferible a dejar en pantalla un movimiento que la base nunca guardó.
+   */
   const agregar = useCallback(
     async (entrada: {
       tipo: TipoMovimientoLibro;
@@ -68,27 +84,66 @@ export function useLibroMayor() {
       descripcion: string;
       categoria?: string | null;
     }) => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        setError('No hay sesión activa: no se puede guardar el movimiento');
-        return;
-      }
-      const { error: e } = await supabase.from('libro_mayor').insert({
-        usuario_id: user.id,
+      // Prefijo reconocible: nada que venga de Postgres puede colisionar con
+      // esto, así que la reconciliación y el descarte son inequívocos.
+      const idTemporal = `optimista-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const optimista: MovimientoLibro = {
+        id: idTemporal,
         tipo: entrada.tipo,
         monto: entrada.monto,
         descripcion: entrada.descripcion,
+        // `fecha` es un DATE en la base, con default CURRENT_DATE: se imita
+        // el mismo formato para que la fila optimista caiga en la ventana de
+        // la quincena en curso igual que la definitiva.
+        fecha: new Date().toISOString().slice(0, 10),
         categoria: entrada.categoria ?? null,
-      });
-      if (e) {
-        setError(e.message);
-        return;
+      };
+
+      setError(null);
+      setMovimientos((previos) => [optimista, ...previos]);
+
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user) throw new Error('No hay sesión activa: no se puede guardar el movimiento');
+
+        const { data, error: e } = await supabase
+          .from('libro_mayor')
+          .insert({
+            usuario_id: user.id,
+            tipo: entrada.tipo,
+            monto: entrada.monto,
+            descripcion: entrada.descripcion,
+            categoria: entrada.categoria ?? null,
+          })
+          .select('id, tipo, monto, descripcion, fecha, categoria')
+          .single();
+        if (e) throw e;
+
+        // Se reemplaza en el sitio en vez de recargar todo: la fila real trae
+        // el id y la fecha que puso Postgres, que es lo único que la
+        // optimista tenía inventado.
+        setMovimientos((previos) =>
+          previos.map((m) =>
+            m.id === idTemporal
+              ? {
+                  id: data.id as string,
+                  tipo: data.tipo as TipoMovimientoLibro,
+                  monto: Number(data.monto),
+                  descripcion: data.descripcion as string,
+                  fecha: data.fecha as string,
+                  categoria: (data.categoria as string | null) ?? null,
+                }
+              : m,
+          ),
+        );
+      } catch (e) {
+        setMovimientos((previos) => previos.filter((m) => m.id !== idTemporal));
+        setError(e instanceof Error ? e.message : 'No se pudo guardar el movimiento');
       }
-      await cargar();
     },
-    [cargar],
+    [],
   );
 
   const resumen = useMemo<ResumenLibroMayor>(() => {

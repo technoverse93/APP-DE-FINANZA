@@ -18,6 +18,7 @@ import {
   AvisoError,
   BlurHeader,
   Card,
+  CompromisosCrediticios,
   DistribucionDonut,
   GastosFijosEditor,
   GraficoBarrasFlujo,
@@ -35,8 +36,7 @@ import {
 } from '../components';
 import { formatearColones } from '../core/payroll/distribution';
 import type { DeudaSimulada } from '../core/payroll/simulador';
-import { useDeudas } from '../state/useDeudas';
-import { useDistribucionQuincena } from '../state/useDistribucionQuincena';
+import { useDatosFinancieros } from '../state/DatosFinancierosProvider';
 import { useSesion } from '../state/useSesion';
 import { campoTexto, colors, radius, spacing, typography } from '../theme';
 
@@ -81,8 +81,10 @@ function dentroDeVentana(fechaIso: string, inicio: Date, fin: Date): boolean {
 }
 
 export function ResumenScreen() {
-  const q = useDistribucionQuincena();
-  const deudasHook = useDeudas();
+  // Del estado global compartido, no de una copia propia: así lo que se anota
+  // desde el acceso rápido o desde la pestaña de Deudas ya viene reflejado acá
+  // sin recargar nada (ver DatosFinancierosProvider).
+  const { q, deudasHook } = useDatosFinancieros();
   const { sesion, cerrarSesion } = useSesion();
 
   const [textoColilla, setTextoColilla] = useState('');
@@ -225,6 +227,26 @@ export function ResumenScreen() {
     void q.colilla.confirmar(monto);
     setTextoColilla('');
   }, [textoColilla, q.colilla]);
+
+  /**
+   * Los gastos fijos que NO son la cuota de una deuda.
+   *
+   * Los que sí lo son (`deudaId`) se crearon solos al registrar la deuda con
+   * cuota fija, y ya se muestran —con su saldo y su plazo— en Compromisos
+   * crediticios. Repetirlos acá los haría ver como si fueran dos egresos
+   * distintos, que es exactamente la confusión que este desglose viene a
+   * quitar. Siguen contando igual en el total: se filtran de la LISTA, no
+   * del cálculo.
+   */
+  const gastosOperativos = useMemo(
+    () => q.gastosFijosItems.gastos.filter((g) => !g.deudaId),
+    [q.gastosFijosItems.gastos],
+  );
+
+  const cuotasAutomaticas = useMemo(
+    () => q.gastosFijosItems.gastos.filter((g) => g.deudaId),
+    [q.gastosFijosItems.gastos],
+  );
 
   /** Se simula contra la deuda más cara: es la que un colón extra alivia más. */
   const deudaMasCara: DeudaSimulada | null = useMemo(() => {
@@ -438,15 +460,42 @@ export function ResumenScreen() {
           </View>
         </View>
 
+        {/* Los egresos van partidos en dos módulos a propósito. Un recibo de
+            luz y la cuota de un préstamo salen del mismo salario, pero no son
+            la misma clase de obligación: el recibo se paga y se acabó, la
+            cuota amortiza un saldo que además genera intereses. Mezclarlos en
+            un solo total escondía cuánto de lo que se va cada quincena es
+            deuda —lo único que se puede acelerar con el remanente— y cuánto
+            es costo de vivir, que no se acelera con nada. */}
         <View style={styles.seccion}>
-          <SectionHeader titulo="Gastos fijos del mes" />
+          <SectionHeader titulo="Gastos fijos operativos" />
+          <Text style={styles.notaSeccion}>
+            Lo que cuesta vivir el mes: alquiler corriente, servicios, internet. No amortiza
+            ningún saldo.
+          </Text>
           <GastosFijosEditor
-            gastos={q.gastosFijosItems.gastos}
+            gastos={gastosOperativos}
             payday={q.payday}
             onCrear={(entrada) => void q.gastosFijosItems.crear(entrada)}
             onActualizar={(id, entrada) => void q.gastosFijosItems.actualizar(id, entrada)}
             onEliminar={(id) => void q.gastosFijosItems.eliminar(id)}
           />
+        </View>
+
+        <View style={styles.seccion}>
+          <SectionHeader titulo="Compromisos crediticios" />
+          <Text style={styles.notaSeccion}>
+            Deuda con saldo: cada abono la achica. Las de mora diaria van primero porque cada
+            día que pasan sin pagarse cuestan más.
+          </Text>
+          <CompromisosCrediticios deudas={deudasHook.deudas} payday={q.payday} />
+          {cuotasAutomaticas.length > 0 ? (
+            <Text style={styles.notaSeccion}>
+              {cuotasAutomaticas.length === 1
+                ? 'Su cuota fija ya se descuenta sola como gasto fijo.'
+                : `Sus ${cuotasAutomaticas.length} cuotas fijas ya se descuentan solas como gasto fijo.`}
+            </Text>
+          ) : null}
         </View>
 
         <View style={styles.seccion}>
@@ -554,6 +603,11 @@ const styles = StyleSheet.create({
     ...typography.footnote,
     color: colors.labelSecondary,
     marginTop: spacing.sm,
+  },
+  notaSeccion: {
+    ...typography.caption1,
+    color: colors.labelTertiary,
+    marginBottom: spacing.sm,
   },
   tarjetaDonut: { marginBottom: spacing.md },
   etiquetaCampo: { ...typography.footnote, color: colors.labelSecondary },
