@@ -18,6 +18,16 @@ export interface Deuda {
   /** Duración estimada del plan de cuota fija, en quincenas. Solo tiene
    * sentido cuando `abonoObjetivo` es mayor a cero. */
   readonly plazoQuincenas: number | null;
+  /**
+   * ¿El interés de esta deuda corre por día (mora) y no por quincena?
+   *
+   * No cambia el cálculo —la tasa sigue siendo mensual nominal— pero sí la
+   * prioridad con que hay que atacarla: en una de estas, cada día de atraso
+   * cuesta plata, así que la interfaz las señala aparte.
+   */
+  readonly interesMoratorioDiario: boolean;
+  /** Fecha tope pactada del compromiso (YYYY-MM-DD), si existe. */
+  readonly fechaLimite: string | null;
 }
 
 /** Deudas reales (saldo + tasa) en `deudas`, para alimentar la Trituradora. */
@@ -32,7 +42,9 @@ export function useDeudas() {
     try {
       const { data, error: e } = await supabase
         .from('deudas')
-        .select('id, nombre, saldo_actual, tasa_mensual, abono_objetivo, plazo_quincenas')
+        .select(
+          'id, nombre, saldo_actual, tasa_mensual, abono_objetivo, plazo_quincenas, interes_moratorio_diario, fecha_limite',
+        )
         .order('creada_en', { ascending: true });
       if (e) throw e;
       setDeudas(
@@ -43,6 +55,8 @@ export function useDeudas() {
           tasaMensual: Number(d.tasa_mensual),
           abonoObjetivo: Number(d.abono_objetivo),
           plazoQuincenas: d.plazo_quincenas === null ? null : Number(d.plazo_quincenas),
+          interesMoratorioDiario: Boolean(d.interes_moratorio_diario),
+          fechaLimite: (d.fecha_limite as string | null) ?? null,
         })),
       );
     } catch (e) {
@@ -65,6 +79,8 @@ export function useDeudas() {
       abonoObjetivo?: number;
       /** Solo cuando `abonoObjetivo` es mayor a cero. */
       plazoQuincenas?: number | null;
+      interesMoratorioDiario?: boolean;
+      fechaLimite?: string | null;
     }) => {
       const {
         data: { user },
@@ -82,6 +98,8 @@ export function useDeudas() {
           tasa_mensual: deuda.tasaMensual,
           abono_objetivo: deuda.abonoObjetivo ?? 0,
           plazo_quincenas: deuda.abonoObjetivo ? (deuda.plazoQuincenas ?? null) : null,
+          interes_moratorio_diario: deuda.interesMoratorioDiario ?? false,
+          fecha_limite: deuda.fechaLimite ?? null,
         })
         .select('id')
         .single();

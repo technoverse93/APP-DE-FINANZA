@@ -16,3 +16,6 @@ export { RejillaDatos, type CeldaDato } from './RejillaDatos';
 export { Termometro, type RubroTermometro } from './Termometro';
 export { SimuladorCard } from './SimuladorCard';
 export { GastosFijosEditor } from './GastosFijosEditor';
+export { AccesoRapido } from './AccesoRapido';
+export { CompromisosCrediticios } from './CompromisosCrediticios';
+export { SimuladorRemanente } from './SimuladorRemanente';
