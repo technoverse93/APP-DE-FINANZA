@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Widget de la pantalla de inicio.
+
+  Solo se usan vistas que RemoteViews admite (LinearLayout, TextView): un
+  widget no corre en el proceso de la app, sino en el del lanzador, y ese solo
+  sabe inflar un conjunto acotado de clases. ConstraintLayout, por ejemplo, no
+  está en esa lista.
+
+  La jerarquía imita una Card de la app: panel #12151A con borde #1E232B y
+  esquinas de 20dp, rótulo terciario en mayúsculas, monto grande, y controles
+  abajo.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/er_fondo_widget"
+    android:padding="16dp">
+
+    <LinearLayout
+        android:id="@+id/widget_cabecera"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/widget_estado"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/widget_titulo"
+            android:textColor="@color/er_label_tertiary"
+            android:textSize="11sp"
+            android:letterSpacing="0.08"
+            android:fontFamily="monospace"
+            android:textAllCaps="true" />
+
+        <TextView
+            android:id="@+id/widget_monto"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:text="—"
+            android:textColor="@color/er_label"
+            android:textSize="30sp"
+            android:fontFamily="monospace"
+            android:textStyle="bold"
+            android:maxLines="1" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/widget_boton_gasto"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:layout_marginEnd="8dp"
+            android:background="@drawable/er_boton_widget"
+            android:gravity="center"
+            android:text="− Gasto"
+            android:textColor="@color/er_red"
+            android:textSize="14sp"
+            android:fontFamily="monospace" />
+
+        <TextView
+            android:id="@+id/widget_boton_ingreso"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:background="@drawable/er_boton_widget"
+            android:gravity="center"
+            android:text="+ Ingreso"
+            android:textColor="@color/er_acento"
+            android:textSize="14sp"
+            android:fontFamily="monospace" />
+    </LinearLayout>
+</LinearLayout>

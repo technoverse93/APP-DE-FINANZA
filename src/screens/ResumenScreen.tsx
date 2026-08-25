@@ -15,6 +15,7 @@ import {
 // terminaba debajo de la barra de navegación del sistema.
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
+  AjustesEntradaRapida,
   AvisoError,
   BlurHeader,
   Card,
@@ -542,6 +543,15 @@ export function ResumenScreen() {
               ultima
             />
           </Card>
+        </View>
+
+        <View style={styles.seccion}>
+          <SectionHeader titulo="Widget y botones físicos" />
+          <Text style={styles.notaSeccion}>
+            Para anotar un gasto sin abrir la app: desde el widget de la pantalla de inicio, o con
+            doble pulsación de volumen abajo.
+          </Text>
+          <AjustesEntradaRapida />
         </View>
 
         <View style={styles.seccion}>

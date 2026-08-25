@@ -2,6 +2,10 @@ import { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import {
+  configurarEntradaRapida,
+  sincronizarPendientesNativos,
+} from './modules/entrada-rapida';
 import { BiometricGate } from './src/auth/BiometricGate';
 import { ConfigWarning, ErrorBoundary } from './src/components';
 import { registrarTareaDeFondo } from './src/lib/backgroundSync';
@@ -73,6 +77,20 @@ export default function App() {
     // después de un pago hay que encolar la del siguiente. El identificador
     // fijo hace que reprogramar reemplace en vez de acumular duplicados.
     void programarAvisoColilla().catch(() => undefined);
+
+    // El widget y la ventana emergente escriben a Supabase por su cuenta, sin
+    // pasar por el cliente de JavaScript: necesitan saber a qué proyecto. Se
+    // configura en cada arranque porque la URL viaja en el bundle, así que una
+    // actualización OTA puede cambiarla sin que se reinstale nada.
+    if (!supabaseConfigError) {
+      configurarEntradaRapida(
+        process.env.EXPO_PUBLIC_SUPABASE_URL!,
+        process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!,
+      );
+    }
+    // Lo que se anotó sin red desde el widget sube ahora, que es cuando hay
+    // una app viva para reintentarlo.
+    void sincronizarPendientesNativos().catch(() => undefined);
   }, []);
 
   return (

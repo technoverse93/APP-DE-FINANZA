@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Tema de la ventana emergente: fondo translúcido para que se siga viendo
+      la app de abajo, sin barra de título y sin animación de ventana completa.
+      windowIsFloating queda en false a propósito: con true, Android limita el
+      ancho y la tarjeta no llega a los bordes en pantallas angostas.
+    -->
+    <style name="TemaEntradaRapida" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@color/er_overlay</item>
+        <item name="android:windowContentOverlay">@null</item>
+        <item name="android:windowIsFloating">false</item>
+        <item name="android:backgroundDimEnabled">false</item>
+        <item name="android:windowCloseOnTouchOutside">true</item>
+    </style>
+</resources>

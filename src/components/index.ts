@@ -19,3 +19,4 @@ export { GastosFijosEditor } from './GastosFijosEditor';
 export { AccesoRapido } from './AccesoRapido';
 export { CompromisosCrediticios } from './CompromisosCrediticios';
 export { SimuladorRemanente } from './SimuladorRemanente';
+export { AjustesEntradaRapida } from './AjustesEntradaRapida';

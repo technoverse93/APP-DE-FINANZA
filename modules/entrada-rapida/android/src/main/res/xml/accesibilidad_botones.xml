@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  canRequestFilterKeyEvents es lo que habilita onKeyEvent; sin esa bandera el
+  servicio se puede activar pero nunca recibe una sola tecla.
+
+  accessibilityEventTypes queda vacío y no se piden capacidades de lectura:
+  este servicio no observa el contenido de ninguna pantalla, solo teclas. Es la
+  configuración de menor alcance que permite hacer lo que hace.
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes=""
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:canRequestFilterKeyEvents="true"
+    android:description="@string/accesibilidad_descripcion"
+    android:notificationTimeout="0" />

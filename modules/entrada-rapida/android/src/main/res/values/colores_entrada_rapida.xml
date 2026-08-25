@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Paleta "Centro de Control", copiada tal cual de src/theme/colors.ts.
+  Los nombres llevan prefijo `er_` para no chocar con los colores que genera
+  Expo en el proyecto principal cuando se fusionan los recursos.
+
+  Están duplicados a mano porque el widget lo dibuja el proceso del lanzador,
+  fuera de React Native: no hay forma de que lea el tema de JavaScript. Si la
+  paleta de la app cambia, este archivo hay que actualizarlo con ella.
+-->
+<resources>
+    <color name="er_background">#0D0F12</color>
+    <color name="er_surface">#12151A</color>
+    <color name="er_fill">#1A1E25</color>
+    <color name="er_label">#F1F4F8</color>
+    <color name="er_label_secondary">#9AA4B2</color>
+    <color name="er_label_tertiary">#6B7480</color>
+    <color name="er_label_inverse">#0D0F12</color>
+    <color name="er_separator">#1E232B</color>
+    <color name="er_acento">#4ADE80</color>
+    <color name="er_red">#F43F5E</color>
+    <color name="er_overlay">#A6000000</color>
+</resources>

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  minWidth/minHeight de 250x110dp equivalen a 4x2 celdas, que es lo mínimo
+  para que quepan el monto y los dos botones sin que el texto se recorte.
+  updatePeriodMillis en 0: el widget no se actualiza solo por reloj —la app lo
+  refresca por broadcast cuando el remanente cambia— así que un temporizador
+  solo gastaría batería redibujando el mismo número.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="250dp"
+    android:minHeight="110dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="2"
+    android:updatePeriodMillis="0"
+    android:initialLayout="@layout/widget_finanzas"
+    android:previewLayout="@layout/widget_finanzas"
+    android:description="@string/widget_descripcion"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen" />
