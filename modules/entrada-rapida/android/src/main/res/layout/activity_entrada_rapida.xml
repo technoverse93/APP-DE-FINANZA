@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Ventana emergente de anotación rápida.
+
+  Replica la hoja inferior del acceso rápido de la app (AccesoRapido.tsx): asa,
+  título, fichas de tipo, campo de monto, botón de acento y salida discreta.
+  Que sean dos implementaciones —una en React Native, otra en XML nativo— es
+  inevitable: esta tiene que poder abrirse con la app cerrada, donde no hay
+  motor de JavaScript que dibuje nada.
+
+  El contenedor exterior es transparente y empuja la tarjeta al fondo, para que
+  quede junto al pulgar y se siga viendo la app de abajo.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="bottom">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="@drawable/er_fondo_tarjeta"
+        android:padding="20dp">
+
+        <View
+            android:layout_width="38dp"
+            android:layout_height="4dp"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginBottom="14dp"
+            android:background="@color/er_label_tertiary" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/entrada_titulo"
+            android:textColor="@color/er_label"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:fontFamily="monospace" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/boton_tipo_gasto"
+                android:layout_width="0dp"
+                android:layout_height="44dp"
+                android:layout_weight="1"
+                android:layout_marginEnd="8dp"
+                android:background="@drawable/er_ficha_gasto"
+                android:text="@string/entrada_gasto"
+                android:textColor="@color/er_texto_ficha"
+                android:textSize="13sp"
+                android:fontFamily="monospace"
+                android:textAllCaps="false"
+                android:stateListAnimator="@null" />
+
+            <Button
+                android:id="@+id/boton_tipo_ingreso"
+                android:layout_width="0dp"
+                android:layout_height="44dp"
+                android:layout_weight="1"
+                android:background="@drawable/er_ficha"
+                android:text="@string/entrada_ingreso"
+                android:textColor="@color/er_texto_ficha"
+                android:textSize="13sp"
+                android:fontFamily="monospace"
+                android:textAllCaps="false"
+                android:stateListAnimator="@null" />
+        </LinearLayout>
+
+        <EditText
+            android:id="@+id/campo_monto"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/er_fondo_campo"
+            android:hint="@string/entrada_monto_pista"
+            android:textColorHint="@color/er_label_tertiary"
+            android:textColor="@color/er_label"
+            android:textSize="20sp"
+            android:fontFamily="monospace"
+            android:inputType="number"
+            android:maxLength="9"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:importantForAutofill="no"
+            android:autofillHints="" />
+
+        <TextView
+            android:id="@+id/aviso"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:textColor="@color/er_red"
+            android:textSize="13sp"
+            android:fontFamily="monospace"
+            android:visibility="gone" />
+
+        <Button
+            android:id="@+id/boton_guardar"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:layout_marginTop="14dp"
+            android:background="@drawable/er_boton_acento"
+            android:text="@string/entrada_guardar"
+            android:textColor="@color/er_label_inverse"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:fontFamily="monospace"
+            android:stateListAnimator="@null" />
+
+        <TextView
+            android:id="@+id/boton_cancelar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:gravity="center"
+            android:text="@string/entrada_cancelar"
+            android:textColor="@color/er_label_secondary"
+            android:textSize="13sp"
+            android:fontFamily="monospace" />
+    </LinearLayout>
+</LinearLayout>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Sobre la ficha seleccionada el fondo es verde o rojo saturado, así que el
+     texto tiene que invertirse a oscuro para seguir siendo legible. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_selected="true" android:color="@color/er_label_inverse" />
+    <item android:color="@color/er_label_secondary" />
+</selector>

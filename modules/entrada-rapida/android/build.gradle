@@ -1,0 +1,32 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'com.technoverse93.appdefinanza'
+version = '0.1.0'
+
+android {
+  namespace "expo.modules.entradarapida"
+  defaultConfig {
+    versionCode 1
+    versionName "0.1.0"
+  }
+}
+
+dependencies {
+  // Los tokens de sesión quedan en disco para que el widget y la ventana
+  // emergente puedan escribir a Supabase sin abrir la app. Guardarlos en un
+  // SharedPreferences normal los dejaría legibles ante un backup o un
+  // teléfono rooteado; EncryptedSharedPreferences los cifra con una llave del
+  // Android Keystore, que es la misma protección que ya usa expo-secure-store
+  // del lado de JavaScript.
+  //
+  // 1.1.0-alpha07 y no 1.0.0: la 1.0.0 solo trae la API vieja basada en un
+  // alias de texto (`create(fileName, masterKeyAlias: String, context, ...)`).
+  // La clase `MasterKey` y el `create(context, fileName, masterKey, ...)` que
+  // usa PuenteDatos.kt llegaron recién acá. Sigue en "alpha" de nombre porque
+  // esta biblioteca nunca salió de eso, no porque sea inestable: es la misma
+  // que documenta Android para EncryptedSharedPreferences.
+  implementation "androidx.security:security-crypto:1.1.0-alpha07"
+}

@@ -1,0 +1,62 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Necesario para que el servicio de accesibilidad pueda abrir la ventana
+         emergente estando la app en segundo plano: desde Android 10 el
+         lanzamiento de actividades desde background está bloqueado salvo que
+         la app tenga concedido "mostrar sobre otras aplicaciones". -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
+    <application>
+
+        <!-- Ventana emergente de entrada rápida.
+             - excludeFromRecents: es un diálogo, no una pantalla; no tiene por
+               qué quedar en el conmutador de apps.
+             - taskAffinity vacío: la ventana vive en su PROPIA tarea, separada
+               de la de la app. Sin esto comparte la tarea principal, y
+               abrirla desde el widget mientras la app está abierta se llevaría
+               por delante la pila de pantallas del usuario.
+             - singleTask: dos invocaciones seguidas no apilan dos ventanas.
+             - No lleva showWhenLocked a propósito: con el teléfono bloqueado
+               no debe poder anotarse nada, porque eso saltaría también el
+               candado del sistema, no solo el de la app. -->
+        <activity
+            android:name="expo.modules.entradarapida.EntradaRapidaActivity"
+            android:theme="@style/TemaEntradaRapida"
+            android:launchMode="singleTask"
+            android:taskAffinity=""
+            android:excludeFromRecents="true"
+            android:exported="false" />
+
+        <!-- Widget de la pantalla de inicio. exported=true es obligatorio:
+             quien envía el broadcast APPWIDGET_UPDATE es el sistema. -->
+        <receiver
+            android:name="expo.modules.entradarapida.WidgetFinanzas"
+            android:exported="true"
+            android:label="@string/widget_titulo">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="expo.modules.entradarapida.ACTUALIZAR_WIDGET" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_finanzas_info" />
+        </receiver>
+
+        <!-- Servicio de accesibilidad: es el único camino en Android para leer
+             los botones físicos con la app cerrada. El usuario tiene que
+             habilitarlo a mano en Ajustes; la app no puede concedérselo sola. -->
+        <service
+            android:name="expo.modules.entradarapida.BotonesFisicosService"
+            android:exported="true"
+            android:label="@string/accesibilidad_titulo"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accesibilidad_botones" />
+        </service>
+
+    </application>
+</manifest>

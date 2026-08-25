@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_titulo">Finanzas · Anotar</string>
+    <string name="widget_descripcion">Remanente libre y anotación rápida de gastos e ingresos.</string>
+    <string name="accesibilidad_titulo">Finanzas · Botones físicos</string>
+    <string name="accesibilidad_descripcion">Permite abrir la ventana de anotación rápida con doble pulsación de volumen abajo. No lee el contenido de tus pantallas.</string>
+
+    <string name="entrada_titulo">Anotar rápido</string>
+    <string name="entrada_gasto">Gasto hormiga</string>
+    <string name="entrada_ingreso">Ingreso extra</string>
+    <string name="entrada_monto_pista">Monto</string>
+    <string name="entrada_guardar">Anotar</string>
+    <string name="entrada_cancelar">Cancelar</string>
+    <string name="entrada_guardada">Anotado %1$s</string>
+    <string name="entrada_encolada">Sin red: queda guardado y se sube solo.</string>
+    <string name="entrada_sin_sesion">Abrí la app e iniciá sesión primero.</string>
+    <string name="entrada_monto_invalido">Escribí un monto mayor a cero.</string>
+</resources>

@@ -1,4 +1,5 @@
-import { createContext, useContext, useMemo, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, type ReactNode } from 'react';
+import { actualizarRemanenteNativo } from '../../modules/entrada-rapida';
 import { useDeudas, type Deuda } from './useDeudas';
 import { useDistribucionQuincena } from './useDistribucionQuincena';
 
@@ -32,6 +33,20 @@ const Contexto = createContext<DatosFinancieros | null>(null);
 export function DatosFinancierosProvider({ children }: { children: ReactNode }) {
   const q = useDistribucionQuincena();
   const deudasHook = useDeudas();
+
+  const remanenteLibre = Math.max(0, q.distribucion.abonoCapitalSugerido);
+
+  /**
+   * Deja el remanente escrito para el widget.
+   *
+   * El widget se dibuja fuera del proceso de React Native y no puede consultar
+   * nada: solo muestra lo último que la app haya dejado en disco. Esto corre
+   * cuando el número cambia de verdad —no en cada render— porque cada llamada
+   * dispara además un redibujado del widget.
+   */
+  useEffect(() => {
+    actualizarRemanenteNativo(remanenteLibre);
+  }, [remanenteLibre]);
 
   const valor = useMemo<DatosFinancieros>(
     () => ({ q, deudasHook, deudas: deudasHook.deudas }),
