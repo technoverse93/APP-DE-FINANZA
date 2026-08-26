@@ -21,6 +21,7 @@ import {
   Card,
   CompromisosCrediticios,
   DistribucionDonut,
+  EstadoActualizacion,
   GastosFijosEditor,
   GraficoBarrasFlujo,
   GraficoTendencia,
@@ -568,6 +569,11 @@ export function ResumenScreen() {
             </Text>
             <PrimaryButton titulo="Cerrar sesión" onPress={() => void cerrarSesion()} />
           </Card>
+        </View>
+
+        <View style={styles.seccion}>
+          <SectionHeader titulo="Actualizaciones" />
+          <EstadoActualizacion />
         </View>
         </ScrollView>
       </KeyboardAvoidingView>
