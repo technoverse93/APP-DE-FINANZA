@@ -347,85 +347,11 @@ export function DeudasScreen() {
           </View>
         ) : null}
 
-        <View style={styles.seccion}>
-          <SectionHeader titulo="Libro Mayor" />
-          <Card>
-            <View style={styles.formulario}>
-              <View style={styles.filaTipo}>
-                <Text
-                  onPress={() => setTipoLibro('gasto')}
-                  style={[styles.chip, tipoLibro === 'gasto' && styles.chipActivo]}
-                >
-                  Gasto
-                </Text>
-                <Text
-                  onPress={() => setTipoLibro('ingreso')}
-                  style={[styles.chip, tipoLibro === 'ingreso' && styles.chipActivo]}
-                >
-                  Ingreso
-                </Text>
-              </View>
-              <TextInput
-                style={styles.input}
-                value={textoMontoLibro}
-                onChangeText={setTextoMontoLibro}
-                keyboardType="number-pad"
-                placeholder="Monto"
-                placeholderTextColor={colors.labelTertiary}
-              />
-              <TextInput
-                style={styles.input}
-                value={categoriaLibro}
-                onChangeText={setCategoriaLibro}
-                placeholder={
-                  tipoLibro === 'ingreso'
-                    ? 'Categoría (ej. Ventas, Reparaciones de hardware)'
-                    : 'Categoría (opcional)'
-                }
-                placeholderTextColor={colors.labelTertiary}
-              />
-              <TextInput
-                style={styles.input}
-                value={descripcionLibro}
-                onChangeText={setDescripcionLibro}
-                placeholder="Descripción (opcional)"
-                placeholderTextColor={colors.labelTertiary}
-              />
-              <PrimaryButton titulo="Anotar" onPress={agregarMovimiento} />
-            </View>
-          </Card>
-          {alertaCosto ? (
-            <View style={styles.avisoCostoOportunidad}>
-              <OpportunityAlertToast costo={alertaCosto} onCerrar={() => setAlertaCosto(null)} />
-            </View>
-          ) : null}
-        </View>
-
-        <View style={styles.seccion}>
-          <SectionHeader titulo="Resumen del período" />
-          <Card sinRelleno>
-            <ListRow titulo="Ingresos variables" valor={formatearColones(libro.resumen.totalIngresos)} tono="positivo" />
-            <ListRow titulo="Gastos anotados" valor={formatearColones(libro.resumen.totalGastos)} tono="negativo" />
-            <ListRow
-              titulo="Neto"
-              valor={formatearColones(libro.resumen.neto)}
-              tono={libro.resumen.neto >= 0 ? 'positivo' : 'negativo'}
-              ultima
-            />
-          </Card>
-        </View>
-
-        {libro.movimientos.length > 0 ? (
-          <View style={styles.seccion}>
-            <SectionHeader titulo="Movimientos recientes" />
-            <Card sinRelleno>
-              {libro.movimientos.slice(0, 10).map((m, i) => (
-                <FilaMovimiento key={m.id} movimiento={m} ultima={i === Math.min(9, libro.movimientos.length - 1)} />
-              ))}
-            </Card>
-          </View>
-        ) : null}
-
+        {/* La Trituradora va primero: es el propósito de esta pestaña. El
+            Libro Mayor (anotar gastos/ingresos del día) es una herramienta
+            auxiliar que vive acá porque el costo de oportunidad de un gasto
+            se calcula contra las deudas, pero no es lo que alguien viene a
+            buscar al abrir "Deudas". */}
         <View style={styles.seccion}>
           <SectionHeader titulo="Trituradora de Deudas" />
           <Card>
@@ -722,6 +648,85 @@ export function DeudasScreen() {
                   />
                 );
               })}
+            </Card>
+          </View>
+        ) : null}
+
+        <View style={styles.seccion}>
+          <SectionHeader titulo="Libro Mayor" />
+          <Card>
+            <View style={styles.formulario}>
+              <View style={styles.filaTipo}>
+                <Text
+                  onPress={() => setTipoLibro('gasto')}
+                  style={[styles.chip, tipoLibro === 'gasto' && styles.chipActivo]}
+                >
+                  Gasto
+                </Text>
+                <Text
+                  onPress={() => setTipoLibro('ingreso')}
+                  style={[styles.chip, tipoLibro === 'ingreso' && styles.chipActivo]}
+                >
+                  Ingreso
+                </Text>
+              </View>
+              <TextInput
+                style={styles.input}
+                value={textoMontoLibro}
+                onChangeText={setTextoMontoLibro}
+                keyboardType="number-pad"
+                placeholder="Monto"
+                placeholderTextColor={colors.labelTertiary}
+              />
+              <TextInput
+                style={styles.input}
+                value={categoriaLibro}
+                onChangeText={setCategoriaLibro}
+                placeholder={
+                  tipoLibro === 'ingreso'
+                    ? 'Categoría (ej. Ventas, Reparaciones de hardware)'
+                    : 'Categoría (opcional)'
+                }
+                placeholderTextColor={colors.labelTertiary}
+              />
+              <TextInput
+                style={styles.input}
+                value={descripcionLibro}
+                onChangeText={setDescripcionLibro}
+                placeholder="Descripción (opcional)"
+                placeholderTextColor={colors.labelTertiary}
+              />
+              <PrimaryButton titulo="Anotar" onPress={agregarMovimiento} />
+            </View>
+          </Card>
+          {alertaCosto ? (
+            <View style={styles.avisoCostoOportunidad}>
+              <OpportunityAlertToast costo={alertaCosto} onCerrar={() => setAlertaCosto(null)} />
+            </View>
+          ) : null}
+        </View>
+
+        <View style={styles.seccion}>
+          <SectionHeader titulo="Resumen del período" />
+          <Card sinRelleno>
+            <ListRow titulo="Ingresos variables" valor={formatearColones(libro.resumen.totalIngresos)} tono="positivo" />
+            <ListRow titulo="Gastos anotados" valor={formatearColones(libro.resumen.totalGastos)} tono="negativo" />
+            <ListRow
+              titulo="Neto"
+              valor={formatearColones(libro.resumen.neto)}
+              tono={libro.resumen.neto >= 0 ? 'positivo' : 'negativo'}
+              ultima
+            />
+          </Card>
+        </View>
+
+        {libro.movimientos.length > 0 ? (
+          <View style={styles.seccion}>
+            <SectionHeader titulo="Movimientos recientes" />
+            <Card sinRelleno>
+              {libro.movimientos.slice(0, 10).map((m, i) => (
+                <FilaMovimiento key={m.id} movimiento={m} ultima={i === Math.min(9, libro.movimientos.length - 1)} />
+              ))}
             </Card>
           </View>
         ) : null}

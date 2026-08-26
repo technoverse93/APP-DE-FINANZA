@@ -330,13 +330,6 @@ export function ResumenScreen() {
 
         <RejillaDatos celdas={celdasDatos} />
 
-        <View style={styles.seccion}>
-          <SectionHeader titulo="Consumo por rubro" />
-          <Card>
-            <Termometro rubros={rubrosConsumo} />
-          </Card>
-        </View>
-
         {q.pedirColilla ? (
           <View style={styles.seccion}>
             <SectionHeader titulo="Colilla de esta quincena" />
@@ -360,6 +353,53 @@ export function ResumenScreen() {
             </Card>
           </View>
         ) : null}
+
+        {/* Los egresos van partidos en dos módulos a propósito. Un recibo de
+            luz y la cuota de un préstamo salen del mismo salario, pero no son
+            la misma clase de obligación: el recibo se paga y se acabó, la
+            cuota amortiza un saldo que además genera intereses. Mezclarlos en
+            un solo total escondía cuánto de lo que se va cada quincena es
+            deuda —lo único que se puede acelerar con el remanente— y cuánto
+            es costo de vivir, que no se acelera con nada.
+            Van justo después de "disponible": es lo primero que hay que ver
+            al abrir la app, antes que el detalle día a día. */}
+        <View style={styles.seccion}>
+          <SectionHeader titulo="Gastos fijos operativos" />
+          <Text style={styles.notaSeccion}>
+            Lo que cuesta vivir el mes: alquiler corriente, servicios, internet. No amortiza
+            ningún saldo.
+          </Text>
+          <GastosFijosEditor
+            gastos={gastosOperativos}
+            payday={q.payday}
+            onCrear={(entrada) => void q.gastosFijosItems.crear(entrada)}
+            onActualizar={(id, entrada) => void q.gastosFijosItems.actualizar(id, entrada)}
+            onEliminar={(id) => void q.gastosFijosItems.eliminar(id)}
+          />
+        </View>
+
+        <View style={styles.seccion}>
+          <SectionHeader titulo="Compromisos crediticios" />
+          <Text style={styles.notaSeccion}>
+            Deuda con saldo: cada abono la achica. Las de mora diaria van primero porque cada
+            día que pasan sin pagarse cuestan más.
+          </Text>
+          <CompromisosCrediticios deudas={deudasHook.deudas} payday={q.payday} />
+          {cuotasAutomaticas.length > 0 ? (
+            <Text style={styles.notaSeccion}>
+              {cuotasAutomaticas.length === 1
+                ? 'Su cuota fija ya se descuenta sola como gasto fijo.'
+                : `Sus ${cuotasAutomaticas.length} cuotas fijas ya se descuentan solas como gasto fijo.`}
+            </Text>
+          ) : null}
+        </View>
+
+        <View style={styles.seccion}>
+          <SectionHeader titulo="Consumo por rubro" />
+          <Card>
+            <Termometro rubros={rubrosConsumo} />
+          </Card>
+        </View>
 
         <View style={styles.seccion}>
           <SectionHeader titulo="Esta quincena" />
@@ -459,44 +499,6 @@ export function ResumenScreen() {
               onPress={agregarTramo}
             />
           </View>
-        </View>
-
-        {/* Los egresos van partidos en dos módulos a propósito. Un recibo de
-            luz y la cuota de un préstamo salen del mismo salario, pero no son
-            la misma clase de obligación: el recibo se paga y se acabó, la
-            cuota amortiza un saldo que además genera intereses. Mezclarlos en
-            un solo total escondía cuánto de lo que se va cada quincena es
-            deuda —lo único que se puede acelerar con el remanente— y cuánto
-            es costo de vivir, que no se acelera con nada. */}
-        <View style={styles.seccion}>
-          <SectionHeader titulo="Gastos fijos operativos" />
-          <Text style={styles.notaSeccion}>
-            Lo que cuesta vivir el mes: alquiler corriente, servicios, internet. No amortiza
-            ningún saldo.
-          </Text>
-          <GastosFijosEditor
-            gastos={gastosOperativos}
-            payday={q.payday}
-            onCrear={(entrada) => void q.gastosFijosItems.crear(entrada)}
-            onActualizar={(id, entrada) => void q.gastosFijosItems.actualizar(id, entrada)}
-            onEliminar={(id) => void q.gastosFijosItems.eliminar(id)}
-          />
-        </View>
-
-        <View style={styles.seccion}>
-          <SectionHeader titulo="Compromisos crediticios" />
-          <Text style={styles.notaSeccion}>
-            Deuda con saldo: cada abono la achica. Las de mora diaria van primero porque cada
-            día que pasan sin pagarse cuestan más.
-          </Text>
-          <CompromisosCrediticios deudas={deudasHook.deudas} payday={q.payday} />
-          {cuotasAutomaticas.length > 0 ? (
-            <Text style={styles.notaSeccion}>
-              {cuotasAutomaticas.length === 1
-                ? 'Su cuota fija ya se descuenta sola como gasto fijo.'
-                : `Sus ${cuotasAutomaticas.length} cuotas fijas ya se descuentan solas como gasto fijo.`}
-            </Text>
-          ) : null}
         </View>
 
         <View style={styles.seccion}>
